@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
+import { UserPlus, Power, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 const VACIO = { nombreCompleto: '', username: '', password: '', rol: 'EMPLEADO' };
 
 export default function Usuarios() {
+  const { usuario: usuarioActual } = useAuth();
+  const toast = useToast();
+  const confirmar = useConfirm();
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [formVisible, setFormVisible] = useState(false);
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
+  const [eliminandoId, setEliminandoId] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -34,8 +42,10 @@ export default function Usuarios() {
       setForm(VACIO);
       setFormVisible(false);
       await cargar();
+      toast.success(`Usuario "${form.nombreCompleto}" creado`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -45,8 +55,33 @@ export default function Usuarios() {
     try {
       await api.patch(`/usuarios/${u.id}`, { activo: !u.activo });
       await cargar();
+      toast.success(u.activo ? `"${u.nombre_completo}" desactivado` : `"${u.nombre_completo}" activado`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
+    }
+  };
+
+  const eliminar = async (u) => {
+    const confirmado = await confirmar({
+      titulo: 'Eliminar usuario',
+      mensaje: `¿Eliminar a "${u.nombre_completo}" (${u.username})? Esta acción no se puede deshacer.`,
+      textoConfirmar: 'Eliminar',
+      peligro: true,
+    });
+    if (!confirmado) return;
+
+    setEliminandoId(u.id);
+    setError('');
+    try {
+      await api.delete(`/usuarios/${u.id}`);
+      await cargar();
+      toast.success(`Usuario "${u.nombre_completo}" eliminado`);
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
+    } finally {
+      setEliminandoId(null);
     }
   };
 
@@ -59,7 +94,8 @@ export default function Usuarios() {
           <p className="subtitle">Personal con acceso al sistema</p>
         </div>
         <button className="btn btn-primary" onClick={() => setFormVisible((v) => !v)}>
-          {formVisible ? 'Cancelar' : '+ Nuevo usuario'}
+          {!formVisible && <UserPlus size={16} />}
+          {formVisible ? 'Cancelar' : 'Nuevo usuario'}
         </button>
       </div>
 
@@ -125,9 +161,21 @@ export default function Usuarios() {
                     </span>
                   </td>
                   <td>
-                    <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(u)}>
-                      {u.activo ? 'Desactivar' : 'Activar'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(u)}>
+                        <Power size={14} />
+                        {u.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm btn-danger"
+                        disabled={u.id === usuarioActual?.id || eliminandoId === u.id}
+                        title={u.id === usuarioActual?.id ? 'No puedes eliminar tu propio usuario' : 'Eliminar usuario'}
+                        onClick={() => eliminar(u)}
+                      >
+                        <Trash2 size={14} />
+                        {eliminandoId === u.id ? 'Eliminando...' : 'Eliminar'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

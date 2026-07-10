@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PlusCircle } from 'lucide-react';
 import { api } from '../api/client';
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
@@ -46,7 +47,7 @@ export default function CuentasAbiertas() {
           <h1>Cuentas abiertas</h1>
           <p className="subtitle">Se actualiza automáticamente cada 10 segundos</p>
         </div>
-        <Link to="/cuentas/nueva" className="btn btn-primary">+ Abrir cuenta</Link>
+        <Link to="/cuentas/nueva" className="btn btn-primary"><PlusCircle size={16} /> Abrir cuenta</Link>
       </div>
 
       {error && <div className="form-error">{error}</div>}
@@ -58,7 +59,7 @@ export default function CuentasAbiertas() {
           <span className="emoji">🍻</span>
           No hay cuentas abiertas ahora mismo.
           <div className="mt-4">
-            <Link to="/cuentas/nueva" className="btn btn-primary">Abrir la primera cuenta</Link>
+            <Link to="/cuentas/nueva" className="btn btn-primary"><PlusCircle size={16} /> Abrir la primera cuenta</Link>
           </div>
         </div>
       ) : (
@@ -71,7 +72,10 @@ export default function CuentasAbiertas() {
                     <div className="ticket-cliente">{c.cliente_referencia}</div>
                     <div className="ticket-meta">{tiempoTranscurrido(c.fecha_apertura)}</div>
                   </div>
-                  <span className="badge badge-open">Abierta</span>
+                  <div className="flex flex-col gap-2" style={{ alignItems: 'flex-end' }}>
+                    <span className="badge badge-open">Abierta</span>
+                    {c.para_llevar && <span className="badge badge-tipo">Para llevar</span>}
+                  </div>
                 </div>
                 <div className="ticket-total">{formatoCOP.format(c.total)}</div>
                 <div className="ticket-meta">Atendió: {c.abierta_por}</div>

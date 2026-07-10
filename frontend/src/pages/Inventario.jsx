@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { PackagePlus, Pencil, Power } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -12,6 +14,7 @@ const VACIO = { nombre: '', tipo: 'CERVEZA', precio: '', stock: '', stockMinimo:
 
 export default function Inventario() {
   const { esAdmin } = useAuth();
+  const toast = useToast();
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -60,13 +63,16 @@ export default function Inventario() {
       };
       if (editando) {
         await api.patch(`/productos/${editando.id}`, payload);
+        toast.success(`"${form.nombre}" actualizado`);
       } else {
         await api.post('/productos', payload);
+        toast.success(`"${form.nombre}" agregado al inventario`);
       }
       setFormVisible(false);
       await cargar();
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -76,8 +82,10 @@ export default function Inventario() {
     try {
       await api.patch(`/productos/${p.id}`, { activo: !p.activo });
       await cargar();
+      toast.success(p.activo ? `"${p.nombre}" desactivado` : `"${p.nombre}" activado`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -90,7 +98,7 @@ export default function Inventario() {
           <p className="subtitle">Cervezas, bebidas y snacks del estadero</p>
         </div>
         {esAdmin && (
-          <button className="btn btn-primary" onClick={abrirNuevo}>+ Nuevo producto</button>
+          <button className="btn btn-primary" onClick={abrirNuevo}><PackagePlus size={16} /> Nuevo producto</button>
         )}
       </div>
 
@@ -176,8 +184,12 @@ export default function Inventario() {
                   {esAdmin && (
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(p)}>Editar</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(p)}>
+                          <Pencil size={14} />
+                          Editar
+                        </button>
                         <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(p)}>
+                          <Power size={14} />
                           {p.activo ? 'Desactivar' : 'Activar'}
                         </button>
                       </div>

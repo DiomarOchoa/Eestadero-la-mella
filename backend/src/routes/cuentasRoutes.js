@@ -4,6 +4,7 @@ const {
   listar,
   obtener,
   abrir,
+  actualizar,
   agregarProducto,
   eliminarProducto,
   actualizarCantidad,
@@ -17,6 +18,7 @@ router.use(autenticar);
 router.get('/', listar);
 router.get('/:id', obtener);
 router.post('/', abrir);
+router.patch('/:id', actualizar);
 router.post('/:id/productos', agregarProducto);
 router.patch('/:id/productos/:itemId', actualizarCantidad);
 router.delete('/:id/productos/:itemId', eliminarProducto);

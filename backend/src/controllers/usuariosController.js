@@ -62,4 +62,40 @@ const actualizar = asyncHandler(async (req, res) => {
   res.json({ ok: true, usuario: rows[0] });
 });
 
-module.exports = { listar, crear, actualizar };
+/** DELETE /api/usuarios/:id - eliminar usuario (solo admin) */
+const eliminar = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const idNum = Number(id);
+
+  if (idNum === req.usuario.id) {
+    throw new ApiError(400, 'No puedes eliminar tu propio usuario mientras tienes la sesión iniciada.');
+  }
+
+  const { rows: existentes } = await query('SELECT id, rol FROM usuarios WHERE id = $1', [id]);
+  if (!existentes[0]) throw new ApiError(404, 'Usuario no encontrado.');
+
+  if (existentes[0].rol === 'ADMIN') {
+    const { rows: admins } = await query(
+      `SELECT COUNT(*)::int AS total FROM usuarios WHERE rol = 'ADMIN' AND activo = TRUE`
+    );
+    if (admins[0].total <= 1) {
+      throw new ApiError(400, 'No puedes eliminar el único administrador activo del sistema.');
+    }
+  }
+
+  try {
+    await query('DELETE FROM usuarios WHERE id = $1', [id]);
+  } catch (err) {
+    if (err.code === '23503') {
+      throw new ApiError(
+        409,
+        'Este usuario ya tiene cuentas registradas (aperturas o cierres) y no puede eliminarse. Puedes desactivarlo en su lugar.'
+      );
+    }
+    throw err;
+  }
+
+  res.json({ ok: true, mensaje: 'Usuario eliminado correctamente.' });
+});
+
+module.exports = { listar, crear, actualizar, eliminar };

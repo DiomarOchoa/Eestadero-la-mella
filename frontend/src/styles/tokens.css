@@ -59,3 +59,34 @@
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
+
+/*
+  Modo claro — mismo carácter (ámbar + verde botella), pero de día:
+  fachada iluminada en vez de neón de noche. Se activa con [data-theme="light"] en <html>.
+*/
+[data-theme='light'] {
+  --color-bg: #F3EEDF;              /* crema cálido — antes era el color de texto */
+  --color-bg-alt: #ECE4CE;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FBF6E9;
+  --color-border: #DDD2B0;
+
+  --color-accent: #B97A1E;          /* ámbar más terroso, con contraste sobre claro */
+  --color-accent-strong: #9C6415;
+  --color-brick: #B4491F;
+  --color-brick-strong: #973B18;
+
+  --color-text: #1E2E22;            /* verde botella oscuro — antes era el fondo */
+  --color-text-muted: #55624E;
+  --color-text-dim: #8A9280;
+
+  --color-success: #2F7A50;
+  --color-success-bg: rgba(47, 122, 80, 0.10);
+  --color-danger: #B4491F;
+  --color-danger-bg: rgba(180, 73, 31, 0.10);
+  --color-warning: #B97A1E;
+  --color-warning-bg: rgba(185, 122, 30, 0.10);
+
+  --shadow-card: 0 8px 24px rgba(30, 46, 34, 0.10);
+  --shadow-pop: 0 12px 32px rgba(30, 46, 34, 0.16);
+}

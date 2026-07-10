@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PlusCircle, Receipt, Package } from 'lucide-react';
 import { api } from '../api/client';
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
@@ -39,7 +40,7 @@ export default function Dashboard() {
           <h1>Dashboard</h1>
           <p className="subtitle">Estado del negocio en este momento</p>
         </div>
-        <Link to="/cuentas/nueva" className="btn btn-primary">+ Abrir cuenta</Link>
+        <Link to="/cuentas/nueva" className="btn btn-primary"><PlusCircle size={16} /> Abrir cuenta</Link>
       </div>
 
       {error && <div className="form-error">{error}</div>}
@@ -66,8 +67,8 @@ export default function Dashboard() {
           <div className="stat-card">
             <div className="stat-label">Acceso rápido</div>
             <div className="flex flex-col gap-2 mt-2">
-              <Link to="/cuentas" className="btn btn-outline btn-sm">Ver cuentas abiertas</Link>
-              <Link to="/inventario" className="btn btn-outline btn-sm">Ver inventario</Link>
+              <Link to="/cuentas" className="btn btn-outline btn-sm"><Receipt size={14} /> Ver cuentas abiertas</Link>
+              <Link to="/inventario" className="btn btn-outline btn-sm"><Package size={14} /> Ver inventario</Link>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body } = require('express-validator');
 const { autenticar, autorizar } = require('../middleware/auth');
 const validar = require('../middleware/validate');
-const { listar, crear, actualizar } = require('../controllers/usuariosController');
+const { listar, crear, actualizar, eliminar } = require('../controllers/usuariosController');
 
 const router = Router();
 
@@ -22,5 +22,7 @@ router.post(
 );
 
 router.patch('/:id', actualizar);
+
+router.delete('/:id', eliminar);
 
 module.exports = router;

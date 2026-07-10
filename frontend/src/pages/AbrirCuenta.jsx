@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DoorOpen } from 'lucide-react';
 import { api } from '../api/client';
+import { useToast } from '../context/ToastContext';
 
 export default function AbrirCuenta() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [referencia, setReferencia] = useState('');
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [sugerencias, setSugerencias] = useState([]);
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
   const [observaciones, setObservaciones] = useState('');
+  const [paraLlevar, setParaLlevar] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const debounceRef = useRef(null);
@@ -53,13 +57,15 @@ export default function AbrirCuenta() {
     setCargando(true);
     try {
       const payload = clienteSeleccionado
-        ? { clienteId: clienteSeleccionado.id, observaciones }
-        : { referencia: referencia.trim(), observaciones };
+        ? { clienteId: clienteSeleccionado.id, observaciones, paraLlevar }
+        : { referencia: referencia.trim(), observaciones, paraLlevar };
 
       const data = await api.post('/cuentas', payload);
+      toast.success(`Cuenta de "${data.cuenta.cliente_referencia}" abierta`);
       navigate(`/cuentas/${data.cuenta.id}`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setCargando(false);
     }
@@ -141,7 +147,22 @@ export default function AbrirCuenta() {
             />
           </div>
 
+          <div className="field">
+            <label className="flex items-center gap-2" style={{ cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={paraLlevar}
+                onChange={(e) => setParaLlevar(e.target.checked)}
+              />
+              <span>Para llevar</span>
+            </label>
+            <span className="text-muted text-sm">
+              Márcalo si el cliente se va a llevar el pedido (no se queda en el local).
+            </span>
+          </div>
+
           <button className="btn btn-primary btn-block" type="submit" disabled={cargando}>
+            <DoorOpen size={16} />
             {cargando ? 'Abriendo...' : 'Abrir cuenta'}
           </button>
         </form>

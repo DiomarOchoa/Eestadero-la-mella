@@ -11,7 +11,7 @@ const listar = asyncHandler(async (req, res) => {
   const estado = (req.query.estado || 'ABIERTA').toUpperCase();
   const { rows } = await query(
     `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
-            c.metodo_pago,
+            c.metodo_pago, c.para_llevar,
             cl.id AS cliente_id, cl.referencia AS cliente_referencia,
             u.nombre_completo AS abierta_por
      FROM cuentas c
@@ -33,7 +33,7 @@ const obtener = asyncHandler(async (req, res) => {
 
   const { rows: cuentaRows } = await query(
     `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre, c.metodo_pago,
-            c.observaciones,
+            c.para_llevar, c.observaciones,
             cl.id AS cliente_id, cl.referencia AS cliente_referencia,
             u.nombre_completo AS abierta_por
      FROM cuentas c
@@ -64,7 +64,7 @@ const obtener = asyncHandler(async (req, res) => {
  * crea el cliente ligero al vuelo (flujo típico: "abrir cuenta a 'casco negro'").
  */
 const abrir = asyncHandler(async (req, res) => {
-  const { clienteId, referencia, observaciones } = req.body;
+  const { clienteId, referencia, observaciones, paraLlevar } = req.body;
 
   if (!clienteId && !referencia) {
     throw new ApiError(400, 'Debes indicar clienteId o una referencia para crear el cliente.');
@@ -84,9 +84,9 @@ const abrir = asyncHandler(async (req, res) => {
     }
 
     const { rows: cuentaRows } = await client.query(
-      `INSERT INTO cuentas (cliente_id, usuario_apertura_id, observaciones)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [clienteFinalId, req.usuario.id, observaciones || null]
+      `INSERT INTO cuentas (cliente_id, usuario_apertura_id, observaciones, para_llevar)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [clienteFinalId, req.usuario.id, observaciones || null, Boolean(paraLlevar)]
     );
 
     await client.query('COMMIT');
@@ -249,10 +249,36 @@ const cerrar = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * PATCH /api/cuentas/:id
+ * Edita datos generales de una cuenta abierta: si es "para llevar" y/o observaciones.
+ * No permite editar cuentas ya cerradas.
+ */
+const actualizar = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { paraLlevar, observaciones } = req.body;
+
+  const { rows: cuentaRows } = await query('SELECT estado FROM cuentas WHERE id = $1', [id]);
+  if (!cuentaRows[0]) throw new ApiError(404, 'Cuenta no encontrada.');
+  if (cuentaRows[0].estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
+
+  const { rows } = await query(
+    `UPDATE cuentas SET
+        para_llevar = COALESCE($1, para_llevar),
+        observaciones = COALESCE($2, observaciones)
+     WHERE id = $3
+     RETURNING *`,
+    [typeof paraLlevar === 'boolean' ? paraLlevar : null, observaciones, id]
+  );
+
+  res.json({ ok: true, cuenta: rows[0] });
+});
+
 module.exports = {
   listar,
   obtener,
   abrir,
+  actualizar,
   agregarProducto,
   eliminarProducto,
   actualizarCantidad,

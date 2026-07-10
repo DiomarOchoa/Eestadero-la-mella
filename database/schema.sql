@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS cuentas (
     estado              estado_cuenta   NOT NULL DEFAULT 'ABIERTA',
     total               NUMERIC(12,2)   NOT NULL DEFAULT 0 CHECK (total >= 0),
     metodo_pago         metodo_pago,
+    para_llevar         BOOLEAN         NOT NULL DEFAULT FALSE,
     observaciones       VARCHAR(255),
     fecha_apertura      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     fecha_cierre        TIMESTAMPTZ
@@ -109,6 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_cuentas_cliente ON cuentas (cliente_id);
 CREATE INDEX IF NOT EXISTS idx_cuentas_fecha_apertura ON cuentas (fecha_apertura);
 -- Consulta muy frecuente: "dame las cuentas abiertas ordenadas por apertura"
 CREATE INDEX IF NOT EXISTS idx_cuentas_estado_fecha ON cuentas (estado, fecha_apertura);
+CREATE INDEX IF NOT EXISTS idx_cuentas_para_llevar ON cuentas (para_llevar);
 
 -- ---------------------------------------------------------
 -- Tabla: detalle_cuenta
