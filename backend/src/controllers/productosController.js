@@ -82,6 +82,35 @@ const actualizar = asyncHandler(async (req, res) => {
   res.json({ ok: true, producto: rows[0] });
 });
 
+/**
+ * DELETE /api/productos/:id - eliminar producto definitivamente.
+ * Solo se permite si el producto nunca ha sido vendido (no tiene renglones
+ * en detalle_cuenta). Si ya tiene historial de ventas, se bloquea con un
+ * mensaje claro y se sugiere desactivarlo en su lugar (PATCH activo=false),
+ * para no romper el historial de cuentas cerradas.
+ */
+const eliminar = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const { rows: existentes } = await query('SELECT id, nombre FROM productos WHERE id = $1', [id]);
+  if (!existentes[0]) throw new ApiError(404, 'Producto no encontrado.');
+
+  const { rows: enUso } = await query(
+    'SELECT 1 FROM detalle_cuenta WHERE producto_id = $1 LIMIT 1',
+    [id]
+  );
+  if (enUso[0]) {
+    throw new ApiError(
+      409,
+      `No se puede eliminar "${existentes[0].nombre}" porque ya tiene ventas registradas. ` +
+        'Puedes desactivarlo para que deje de aparecer disponible, sin perder el historial.'
+    );
+  }
+
+  await query('DELETE FROM productos WHERE id = $1', [id]);
+  res.json({ ok: true, mensaje: `"${existentes[0].nombre}" eliminado del inventario.` });
+});
+
 /** GET /api/productos/inventario/bajo-stock - productos por debajo del stock mínimo */
 const bajoStock = asyncHandler(async (req, res) => {
   const { rows } = await query(
@@ -92,4 +121,4 @@ const bajoStock = asyncHandler(async (req, res) => {
   res.json({ ok: true, productos: rows });
 });
 
-module.exports = { listar, crear, actualizar, bajoStock };
+module.exports = { listar, crear, actualizar, eliminar, bajoStock };
