@@ -40,14 +40,6 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'Estadero La Mella API', hora: new Date().toISOString() });
 });
 
-// Ruta temporal de diagnóstico - BORRAR después de confirmar el problema
-app.get('/api/debug-env', (req, res) => {
-  res.json({
-    FRONTEND_URL: process.env.FRONTEND_URL || null,
-    origenesPermitidos,
-  });
-});
-
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/productos', productosRoutes);
