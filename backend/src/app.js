@@ -1,3 +1,4 @@
+const cajaRoutes = require('./routes/cajaRoutes');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
