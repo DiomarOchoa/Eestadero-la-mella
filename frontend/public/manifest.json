@@ -1,0 +1,14 @@
+{
+  "name": "Estadero La Mella",
+  "short_name": "La Mella",
+  "description": "Gestión de cuentas abiertas del Estadero La Mella",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14201A",
+  "theme_color": "#14201A",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
