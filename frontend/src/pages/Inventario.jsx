@@ -24,7 +24,7 @@ export default function Inventario() {
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
 
-  // 🆕 CAJA
+  // CAJA
   const [cajaAbierta, setCajaAbierta] = useState(false);
 
   const cargar = async () => {
@@ -39,7 +39,6 @@ export default function Inventario() {
     }
   };
 
-  // 🆕 cargar estado caja
   const cargarCaja = async () => {
     try {
       const data = await api.get('/caja');
@@ -111,20 +110,18 @@ export default function Inventario() {
     }
   };
 
-  // 🆕 ELIMINAR
   const eliminarProducto = async (p) => {
     if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
 
     try {
-      await api.delete(`/productos/${p.id}`);
-      toast.success('Producto eliminado');
+      const res = await api.delete(`/productos/${p.id}`);
+      toast.success(res.mensaje || 'Producto eliminado');
       await cargar();
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  // 🆕 TOGGLE CAJA
   const toggleCaja = async () => {
     try {
       if (cajaAbierta) {
@@ -150,62 +147,88 @@ export default function Inventario() {
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          {/* 🆕 BOTÓN CAJA */}
           <button className="btn btn-outline" onClick={toggleCaja}>
             {cajaAbierta ? 'Cerrar caja' : 'Abrir caja'}
           </button>
 
           {esAdmin && (
             <button className="btn btn-primary" onClick={abrirNuevo}>
-              <PackagePlus size={16} /> Nuevo
+              <PackagePlus size={16} /> Nuevo producto
             </button>
           )}
         </div>
       </div>
 
+      {error && <div className="form-error">{error}</div>}
+
       {formVisible && (
         <div className="card mb-4" style={{ maxWidth: 480 }}>
           <div className="card-title">
-            {editando ? 'Editar' : 'Nuevo producto'}
+            {editando ? 'Editar producto' : 'Nuevo producto'}
           </div>
 
           <form onSubmit={guardar}>
-            <input
-              className="input"
-              placeholder="Nombre"
-              required
-              value={form.nombre}
-              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-            />
+            <div className="field">
+              <label>Nombre</label>
+              <input
+                className="input"
+                required
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              />
+            </div>
 
-            <input
-              className="input"
-              type="number"
-              placeholder="Precio"
-              required
-              value={form.precio}
-              onChange={(e) => setForm({ ...form, precio: e.target.value })}
-            />
+            <div className="grid grid-cols-2">
+              <div className="field">
+                <label>Tipo</label>
+                <select
+                  className="input"
+                  value={form.tipo}
+                  onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+                >
+                  <option value="CERVEZA">Cerveza</option>
+                  <option value="BEBIDA">Bebida</option>
+                  <option value="SNACK">Snack</option>
+                </select>
+              </div>
 
-            <input
-              className="input"
-              type="number"
-              placeholder="Stock"
-              required
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
-            />
+              <div className="field">
+                <label>Precio</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={form.precio}
+                  onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                />
+              </div>
+
+              <div className="field">
+                <label>Stock</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                />
+              </div>
+
+              <div className="field">
+                <label>Stock mínimo</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={form.stockMinimo}
+                  onChange={(e) => setForm({ ...form, stockMinimo: e.target.value })}
+                />
+              </div>
+            </div>
 
             <div className="flex gap-2 mt-2">
-              <button type="submit" className="btn btn-primary">
-                Guardar
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setFormVisible(false)}
-              >
+              <button type="button" className="btn btn-outline" onClick={() => setFormVisible(false)}>
                 Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                Guardar
               </button>
             </div>
           </form>
@@ -215,45 +238,50 @@ export default function Inventario() {
       {cargando ? (
         <div className="spinner" />
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Precio</th>
-              <th>Stock</th>
-              <th></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {productos.map((p) => (
-              <tr key={p.id}>
-                <td>{p.nombre}</td>
-                <td>{formatoCOP.format(p.precio)}</td>
-                <td>{p.stock}</td>
-
-                {esAdmin && (
-                  <td>
-                    <div className="flex gap-2">
-                      <button onClick={() => abrirEditar(p)}>
-                        <Pencil size={14} />
-                      </button>
-
-                      <button onClick={() => toggleActivo(p)}>
-                        <Power size={14} />
-                      </button>
-
-                      {/* 🆕 ELIMINAR */}
-                      <button onClick={() => eliminarProducto(p)}>
-                        <Trash size={14} />
-                      </button>
-                    </div>
-                  </td>
-                )}
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Tipo</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Estado</th>
+                {esAdmin && <th></th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {productos.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.nombre}</td>
+                  <td>{p.tipo}</td>
+                  <td>{formatoCOP.format(p.precio)}</td>
+                  <td>{p.stock}</td>
+                  <td>{p.activo ? 'Activo' : 'Inactivo'}</td>
+
+                  {esAdmin && (
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => abrirEditar(p)}>
+                          <Pencil size={14} />
+                        </button>
+
+                        <button onClick={() => toggleActivo(p)}>
+                          <Power size={14} />
+                        </button>
+
+                        <button onClick={() => eliminarProducto(p)}>
+                          <Trash size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
