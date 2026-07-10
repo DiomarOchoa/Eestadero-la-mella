@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body } = require('express-validator');
 const { autenticar, autorizar } = require('../middleware/auth');
 const validar = require('../middleware/validate');
-const { listar, crear, actualizar, bajoStock } = require('../controllers/productosController');
+const { listar, crear, actualizar, eliminar, bajoStock } = require('../controllers/productosController');
 
 const router = Router();
 
@@ -11,7 +11,7 @@ router.use(autenticar);
 router.get('/', listar);
 router.get('/inventario/bajo-stock', bajoStock);
 
-// Crear/editar productos requiere rol ADMIN (control de inventario/precio)
+// Crear/editar/eliminar productos requiere rol ADMIN (control de inventario/precio)
 router.post(
   '/',
   autorizar('ADMIN'),
@@ -21,5 +21,6 @@ router.post(
 );
 
 router.patch('/:id', autorizar('ADMIN'), actualizar);
+router.delete('/:id', autorizar('ADMIN'), eliminar);
 
 module.exports = router;
