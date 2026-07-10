@@ -15,7 +15,6 @@ router.use(autenticar);
 router.get('/', listar);
 router.get('/inventario/bajo-stock', bajoStock);
 
-// Crear/editar/eliminar productos requiere rol ADMIN
 router.post(
   '/',
   autorizar('ADMIN'),
@@ -32,7 +31,7 @@ router.patch('/:id', autorizar('ADMIN'), actualizar);
 router.delete('/:id', autorizar('ADMIN'), eliminar);
 
 // =========================
-// CAJA (NUEVO)
+// CAJA
 // =========================
 
 let cajaAbierta = false;
