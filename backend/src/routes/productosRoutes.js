@@ -8,19 +8,49 @@ const router = Router();
 
 router.use(autenticar);
 
+// =========================
+// PRODUCTOS
+// =========================
+
 router.get('/', listar);
 router.get('/inventario/bajo-stock', bajoStock);
 
-// Crear/editar/eliminar productos requiere rol ADMIN (control de inventario/precio)
+// Crear/editar/eliminar productos requiere rol ADMIN
 router.post(
   '/',
   autorizar('ADMIN'),
-  [body('nombre').notEmpty(), body('tipo').notEmpty(), body('precio').isFloat({ min: 0 })],
+  [
+    body('nombre').notEmpty(),
+    body('tipo').notEmpty(),
+    body('precio').isFloat({ min: 0 })
+  ],
   validar,
   crear
 );
 
 router.patch('/:id', autorizar('ADMIN'), actualizar);
 router.delete('/:id', autorizar('ADMIN'), eliminar);
+
+// =========================
+// CAJA (NUEVO)
+// =========================
+
+let cajaAbierta = false;
+
+router.get('/caja', (req, res) => {
+  res.json({ abierta: cajaAbierta });
+});
+
+router.post('/caja/abrir', (req, res) => {
+  cajaAbierta = true;
+  res.json({ abierta: true });
+});
+
+router.post('/caja/cerrar', (req, res) => {
+  cajaAbierta = false;
+  res.json({ abierta: false });
+});
+
+// =========================
 
 module.exports = router;
