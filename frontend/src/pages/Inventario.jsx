@@ -41,7 +41,7 @@ export default function Inventario() {
 
   const cargarCaja = async () => {
     try {
-      const data = await api.get('/caja');
+      const data = await api.get('/productos/caja'); // ✅ CORREGIDO
       setCajaAbierta(data.abierta);
     } catch {}
   };
@@ -125,10 +125,10 @@ export default function Inventario() {
   const toggleCaja = async () => {
     try {
       if (cajaAbierta) {
-        await api.post('/caja/cerrar');
+        await api.post('/productos/caja/cerrar'); // ✅ CORREGIDO
         toast.success('Caja cerrada');
       } else {
-        await api.post('/caja/abrir');
+        await api.post('/productos/caja/abrir'); // ✅ CORREGIDO
         toast.success('Caja abierta');
       }
       cargarCaja();
