@@ -71,7 +71,8 @@ const resumen = asyncHandler(async (req, res) => {
 /**
  * GET /api/reportes/cuentas-detalle?dias=14
  * Historial de cuentas cerradas, con el nombre/referencia del cliente
- * tal como aparece al abrir la cuenta (ej. "Casco negro", "Mesa 2").
+ * tal como aparece al abrir la cuenta (ej. "Casco negro", "Mesa 2"),
+ * y el detalle de productos consumidos en cada una.
  */
 const cuentasDetalle = asyncHandler(async (req, res) => {
   const dias = Number(req.query.dias) || 30;
@@ -83,7 +84,21 @@ const cuentasDetalle = asyncHandler(async (req, res) => {
             c.para_llevar,
             c.fecha_apertura,
             c.fecha_cierre,
-            u.nombre_completo    AS atendido_por
+            u.nombre_completo    AS atendido_por,
+            COALESCE(
+              (SELECT json_agg(
+                        json_build_object(
+                          'producto', p.nombre,
+                          'cantidad', d.cantidad,
+                          'precio_unitario', d.precio_unitario,
+                          'subtotal', d.subtotal
+                        ) ORDER BY p.nombre
+                      )
+               FROM detalle_cuenta d
+               JOIN productos p ON p.id = d.producto_id
+               WHERE d.cuenta_id = c.id
+              ), '[]'::json
+            ) AS productos
      FROM cuentas c
      JOIN clientes cl ON cl.id = c.cliente_id
      LEFT JOIN usuarios u ON u.id = c.usuario_cierre_id
