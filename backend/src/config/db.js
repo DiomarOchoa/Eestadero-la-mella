@@ -11,6 +11,9 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   max: 10,
   idleTimeoutMillis: 30000,
+  // Render inyecta la variable RENDER=true automáticamente en producción.
+  // Solo activamos SSL ahí, para no romper la conexión en local.
+  ssl: process.env.RENDER ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => {
