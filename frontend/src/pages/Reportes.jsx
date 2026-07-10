@@ -35,6 +35,9 @@ export default function Reportes() {
   const [cargandoCaja, setCargandoCaja] = useState(true);
   const [errorCaja, setErrorCaja] = useState('');
 
+  // IDs de cuentas actualmente expandidas en la tabla de "Cuentas cerradas recientes"
+  const [cuentasExpandidas, setCuentasExpandidas] = useState(() => new Set());
+
   useEffect(() => {
     Promise.all([
       api.get('/reportes/ventas-por-dia', { dias: 30 }),
@@ -61,6 +64,18 @@ export default function Reportes() {
   }, [fechaCaja]);
 
   const maxVenta = Math.max(1, ...ventas.map((v) => Number(v.total_vendido)));
+
+  function toggleCuenta(id) {
+    setCuentasExpandidas((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) {
+        siguiente.delete(id);
+      } else {
+        siguiente.add(id);
+      }
+      return siguiente;
+    });
+  }
 
   return (
     <div>
@@ -210,6 +225,7 @@ export default function Reportes() {
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th style={{ width: 32 }}></th>
                       <th>Cliente</th>
                       <th>Cierre</th>
                       <th>Método de pago</th>
@@ -219,16 +235,73 @@ export default function Reportes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {cuentasDetalle.map((c) => (
-                      <tr key={c.id}>
-                        <td>{c.cliente}</td>
-                        <td className="mono">{formatoFechaHora.format(new Date(c.fecha_cierre))}</td>
-                        <td>{ETIQUETAS_PAGO[c.metodo_pago] || c.metodo_pago || '—'}</td>
-                        <td>{c.para_llevar ? 'Sí' : 'No'}</td>
-                        <td>{c.atendido_por || '—'}</td>
-                        <td className="mono">{formatoCOP.format(c.total)}</td>
-                      </tr>
-                    ))}
+                    {cuentasDetalle.map((c) => {
+                      const abierta = cuentasExpandidas.has(c.id);
+                      const productos = c.productos || [];
+                      return (
+                        <>
+                          <tr
+                            key={c.id}
+                            onClick={() => toggleCuenta(c.id)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <td>
+                              <span
+                                aria-label={abierta ? 'Contraer detalle' : 'Expandir detalle'}
+                                style={{
+                                  display: 'inline-block',
+                                  transition: 'transform 0.15s ease',
+                                  transform: abierta ? 'rotate(90deg)' : 'rotate(0deg)',
+                                  color: 'var(--color-text-muted)',
+                                }}
+                              >
+                                ▶
+                              </span>
+                            </td>
+                            <td>{c.cliente}</td>
+                            <td className="mono">{formatoFechaHora.format(new Date(c.fecha_cierre))}</td>
+                            <td>{ETIQUETAS_PAGO[c.metodo_pago] || c.metodo_pago || '—'}</td>
+                            <td>{c.para_llevar ? 'Sí' : 'No'}</td>
+                            <td>{c.atendido_por || '—'}</td>
+                            <td className="mono">{formatoCOP.format(c.total)}</td>
+                          </tr>
+
+                          {abierta && (
+                            <tr key={`${c.id}-detalle`}>
+                              <td></td>
+                              <td colSpan={6} style={{ background: 'var(--color-bg-alt)', padding: 0 }}>
+                                {productos.length === 0 ? (
+                                  <p className="text-muted text-sm" style={{ padding: 'var(--space-2) var(--space-3)' }}>
+                                    Sin productos registrados en esta cuenta.
+                                  </p>
+                                ) : (
+                                  <table className="data-table" style={{ background: 'transparent' }}>
+                                    <thead>
+                                      <tr>
+                                        <th>Producto</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio unitario</th>
+                                        <th>Subtotal</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {productos.map((p, idx) => (
+                                        <tr key={idx}>
+                                          <td>{p.producto}</td>
+                                          <td className="mono">{p.cantidad}</td>
+                                          <td className="mono">{formatoCOP.format(p.precio_unitario)}</td>
+                                          <td className="mono">{formatoCOP.format(p.subtotal)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
