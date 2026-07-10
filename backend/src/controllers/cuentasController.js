@@ -89,8 +89,26 @@ const abrir = asyncHandler(async (req, res) => {
       [clienteFinalId, req.usuario.id, observaciones || null, Boolean(paraLlevar)]
     );
 
+    const cuentaId = cuentaRows[0].id;
+
+    // Volvemos a consultar la cuenta recién creada, esta vez con el JOIN
+    // a clientes/usuarios, para devolver la misma forma que "listar"/"obtener"
+    // (incluye cliente_referencia). El INSERT ... RETURNING * por sí solo
+    // no trae ese dato porque no hace join con la tabla clientes.
+    const { rows: cuentaConCliente } = await client.query(
+      `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
+              c.metodo_pago, c.para_llevar,
+              cl.id AS cliente_id, cl.referencia AS cliente_referencia,
+              u.nombre_completo AS abierta_por
+       FROM cuentas c
+       JOIN clientes cl ON cl.id = c.cliente_id
+       JOIN usuarios u ON u.id = c.usuario_apertura_id
+       WHERE c.id = $1`,
+      [cuentaId]
+    );
+
     await client.query('COMMIT');
-    res.status(201).json({ ok: true, cuenta: cuentaRows[0] });
+    res.status(201).json({ ok: true, cuenta: cuentaConCliente[0] });
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
