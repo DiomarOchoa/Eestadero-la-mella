@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PackagePlus, Pencil, Power } from 'lucide-react';
+import { PackagePlus, Pencil, Power, Trash } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -15,6 +15,7 @@ const VACIO = { nombre: '', tipo: 'CERVEZA', precio: '', stock: '', stockMinimo:
 export default function Inventario() {
   const { esAdmin } = useAuth();
   const toast = useToast();
+
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -22,6 +23,9 @@ export default function Inventario() {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
+
+  // 🆕 CAJA
+  const [cajaAbierta, setCajaAbierta] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -35,7 +39,18 @@ export default function Inventario() {
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  // 🆕 cargar estado caja
+  const cargarCaja = async () => {
+    try {
+      const data = await api.get('/caja');
+      setCajaAbierta(data.abierta);
+    } catch {}
+  };
+
+  useEffect(() => {
+    cargar();
+    cargarCaja();
+  }, []);
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -45,7 +60,13 @@ export default function Inventario() {
 
   const abrirEditar = (p) => {
     setEditando(p);
-    setForm({ nombre: p.nombre, tipo: p.tipo, precio: p.precio, stock: p.stock, stockMinimo: p.stock_minimo });
+    setForm({
+      nombre: p.nombre,
+      tipo: p.tipo,
+      precio: p.precio,
+      stock: p.stock,
+      stockMinimo: p.stock_minimo,
+    });
     setFormVisible(true);
   };
 
@@ -61,13 +82,15 @@ export default function Inventario() {
         stock: Number(form.stock),
         stockMinimo: Number(form.stockMinimo),
       };
+
       if (editando) {
         await api.patch(`/productos/${editando.id}`, payload);
         toast.success(`"${form.nombre}" actualizado`);
       } else {
         await api.post('/productos', payload);
-        toast.success(`"${form.nombre}" agregado al inventario`);
+        toast.success(`"${form.nombre}" agregado`);
       }
+
       setFormVisible(false);
       await cargar();
     } catch (err) {
@@ -82,9 +105,37 @@ export default function Inventario() {
     try {
       await api.patch(`/productos/${p.id}`, { activo: !p.activo });
       await cargar();
-      toast.success(p.activo ? `"${p.nombre}" desactivado` : `"${p.nombre}" activado`);
+      toast.success(p.activo ? 'Desactivado' : 'Activado');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
+    }
+  };
+
+  // 🆕 ELIMINAR
+  const eliminarProducto = async (p) => {
+    if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
+
+    try {
+      await api.delete(`/productos/${p.id}`);
+      toast.success('Producto eliminado');
+      await cargar();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // 🆕 TOGGLE CAJA
+  const toggleCaja = async () => {
+    try {
+      if (cajaAbierta) {
+        await api.post('/caja/cerrar');
+        toast.success('Caja cerrada');
+      } else {
+        await api.post('/caja/abrir');
+        toast.success('Caja abierta');
+      }
+      cargarCaja();
+    } catch (err) {
       toast.error(err.message);
     }
   };
@@ -95,54 +146,66 @@ export default function Inventario() {
         <div>
           <span className="eyebrow">Control de stock</span>
           <h1>Inventario</h1>
-          <p className="subtitle">Cervezas, bebidas y snacks del estadero</p>
+          <p className="subtitle">Cervezas, bebidas y snacks</p>
         </div>
-        {esAdmin && (
-          <button className="btn btn-primary" onClick={abrirNuevo}><PackagePlus size={16} /> Nuevo producto</button>
-        )}
-      </div>
 
-      {error && <div className="form-error">{error}</div>}
+        <div style={{ display: 'flex', gap: 10 }}>
+          {/* 🆕 BOTÓN CAJA */}
+          <button className="btn btn-outline" onClick={toggleCaja}>
+            {cajaAbierta ? 'Cerrar caja' : 'Abrir caja'}
+          </button>
+
+          {esAdmin && (
+            <button className="btn btn-primary" onClick={abrirNuevo}>
+              <PackagePlus size={16} /> Nuevo
+            </button>
+          )}
+        </div>
+      </div>
 
       {formVisible && (
         <div className="card mb-4" style={{ maxWidth: 480 }}>
-          <div className="card-title">{editando ? 'Editar producto' : 'Nuevo producto'}</div>
+          <div className="card-title">
+            {editando ? 'Editar' : 'Nuevo producto'}
+          </div>
+
           <form onSubmit={guardar}>
-            <div className="field">
-              <label>Nombre</label>
-              <input className="input" required value={form.nombre}
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2">
-              <div className="field">
-                <label>Tipo</label>
-                <select className="input" value={form.tipo}
-                  onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
-                  <option value="CERVEZA">Cerveza</option>
-                  <option value="BEBIDA">Bebida</option>
-                  <option value="SNACK">Snack</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Precio (COP)</label>
-                <input className="input" type="number" min="0" required value={form.precio}
-                  onChange={(e) => setForm({ ...form, precio: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Stock</label>
-                <input className="input" type="number" min="0" required value={form.stock}
-                  onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Stock mínimo (alerta)</label>
-                <input className="input" type="number" min="0" required value={form.stockMinimo}
-                  onChange={(e) => setForm({ ...form, stockMinimo: e.target.value })} />
-              </div>
-            </div>
+            <input
+              className="input"
+              placeholder="Nombre"
+              required
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            />
+
+            <input
+              className="input"
+              type="number"
+              placeholder="Precio"
+              required
+              value={form.precio}
+              onChange={(e) => setForm({ ...form, precio: e.target.value })}
+            />
+
+            <input
+              className="input"
+              type="number"
+              placeholder="Stock"
+              required
+              value={form.stock}
+              onChange={(e) => setForm({ ...form, stock: e.target.value })}
+            />
+
             <div className="flex gap-2 mt-2">
-              <button type="button" className="btn btn-outline" onClick={() => setFormVisible(false)}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={guardando}>
-                {guardando ? 'Guardando...' : 'Guardar'}
+              <button type="submit" className="btn btn-primary">
+                Guardar
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setFormVisible(false)}
+              >
+                Cancelar
               </button>
             </div>
           </form>
@@ -152,54 +215,45 @@ export default function Inventario() {
       {cargando ? (
         <div className="spinner" />
       ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Tipo</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th>Estado</th>
-                {esAdmin && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {productos.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.nombre}</td>
-                  <td><span className="badge badge-tipo">{p.tipo}</span></td>
-                  <td className="mono">{formatoCOP.format(p.precio)}</td>
-                  <td className="mono">
-                    {p.stock}
-                    {p.stock <= p.stock_minimo && (
-                      <span className="badge badge-danger" style={{ marginLeft: 8 }}>Bajo</span>
-                    )}
-                  </td>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Stock</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {productos.map((p) => (
+              <tr key={p.id}>
+                <td>{p.nombre}</td>
+                <td>{formatoCOP.format(p.precio)}</td>
+                <td>{p.stock}</td>
+
+                {esAdmin && (
                   <td>
-                    <span className={`badge ${p.activo ? 'badge-closed' : 'badge-danger'}`}>
-                      {p.activo ? 'Activo' : 'Inactivo'}
-                    </span>
+                    <div className="flex gap-2">
+                      <button onClick={() => abrirEditar(p)}>
+                        <Pencil size={14} />
+                      </button>
+
+                      <button onClick={() => toggleActivo(p)}>
+                        <Power size={14} />
+                      </button>
+
+                      {/* 🆕 ELIMINAR */}
+                      <button onClick={() => eliminarProducto(p)}>
+                        <Trash size={14} />
+                      </button>
+                    </div>
                   </td>
-                  {esAdmin && (
-                    <td>
-                      <div className="flex gap-2">
-                        <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(p)}>
-                          <Pencil size={14} />
-                          Editar
-                        </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(p)}>
-                          <Power size={14} />
-                          {p.activo ? 'Desactivar' : 'Activar'}
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
