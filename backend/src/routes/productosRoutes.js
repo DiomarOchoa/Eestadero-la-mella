@@ -8,10 +8,6 @@ const router = Router();
 
 router.use(autenticar);
 
-// =========================
-// PRODUCTOS
-// =========================
-
 router.get('/', listar);
 router.get('/inventario/bajo-stock', bajoStock);
 
@@ -29,27 +25,5 @@ router.post(
 
 router.patch('/:id', autorizar('ADMIN'), actualizar);
 router.delete('/:id', autorizar('ADMIN'), eliminar);
-
-// =========================
-// CAJA
-// =========================
-
-let cajaAbierta = false;
-
-router.get('/caja', (req, res) => {
-  res.json({ abierta: cajaAbierta });
-});
-
-router.post('/caja/abrir', (req, res) => {
-  cajaAbierta = true;
-  res.json({ abierta: true });
-});
-
-router.post('/caja/cerrar', (req, res) => {
-  cajaAbierta = false;
-  res.json({ abierta: false });
-});
-
-// =========================
 
 module.exports = router;
