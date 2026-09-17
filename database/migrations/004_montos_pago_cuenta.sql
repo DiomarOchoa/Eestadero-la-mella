@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE cuentas
+    ADD COLUMN IF NOT EXISTS monto_efectivo NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS monto_transferencia NUMERIC(12,2);
+
+COMMIT;
