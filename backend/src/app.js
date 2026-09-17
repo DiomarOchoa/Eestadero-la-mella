@@ -1,4 +1,4 @@
-const cajaRoutes = require('./routes/cajaRoutes');
+const cajaRoutes = require('./routes/cajaroutes');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -12,10 +12,6 @@ const reportesRoutes = require('./routes/reportesRoutes');
 
 const app = express();
 
-// FRONTEND_URL admite una o varias URLs separadas por coma, ej:
-// FRONTEND_URL=http://localhost:5173,http://192.168.1.9:5173
-// Esto permite usar el sistema desde el PC (localhost) y desde el
-// celular en la misma red (IP local) al mismo tiempo.
 const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map((url) => url.trim())
@@ -24,7 +20,6 @@ const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
 app.use(
   cors({
     origin(origin, callback) {
-      // Sin "origin" (ej: Postman, curl, healthchecks) -> permitir
       if (!origin || origenesPermitidos.includes(origin)) {
         return callback(null, true);
       }
@@ -36,7 +31,6 @@ app.use(
 
 app.use(express.json());
 
-// Healthcheck simple
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'Estadero La Mella API', hora: new Date().toISOString() });
 });
@@ -47,13 +41,12 @@ app.use('/api/productos', productosRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/cuentas', cuentasRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/caja', cajaRoutes);
 
-// Ruta no encontrada
 app.use((req, res) => {
   res.status(404).json({ ok: false, mensaje: 'Ruta no encontrada.' });
 });
 
-// Manejo de errores centralizado (SIEMPRE al final)
 app.use(errorHandler);
 
 module.exports = app;
