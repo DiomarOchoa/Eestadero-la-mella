@@ -23,10 +23,12 @@ export default function VistaCuenta() {
   const [productos, setProductos] = useState([]);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(true);
-  const [agregando, setAgregando] = useState(null); // id del producto en vuelo
+  const [agregando, setAgregando] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('');
   const [mostrarCierre, setMostrarCierre] = useState(false);
   const [metodoPago, setMetodoPago] = useState('EFECTIVO');
+  const [montoEfectivo, setMontoEfectivo] = useState('');
+  const [montoTransferencia, setMontoTransferencia] = useState('');
   const [cerrando, setCerrando] = useState(false);
 
   const cargarCuenta = useCallback(async () => {
@@ -98,7 +100,12 @@ export default function VistaCuenta() {
     setCerrando(true);
     setError('');
     try {
-      await api.post(`/cuentas/${id}/cerrar`, { metodoPago });
+      const datos = { metodoPago };
+      if (metodoPago === 'MIXTO') {
+        datos.montoEfectivo = Number(montoEfectivo);
+        datos.montoTransferencia = Number(montoTransferencia);
+      }
+      await api.post(`/cuentas/${id}/cerrar`, datos);
       toast.success('Cuenta cerrada correctamente');
       navigate('/cuentas');
     } catch (err) {
@@ -107,6 +114,18 @@ export default function VistaCuenta() {
       setCerrando(false);
     }
   };
+
+  const seleccionarMetodo = (metodo) => {
+    setMetodoPago(metodo);
+    setError('');
+    if (metodo === 'MIXTO' && cuenta) {
+      setMontoEfectivo('');
+      setMontoTransferencia('');
+    }
+  };
+
+  const totalMixto = Number(montoEfectivo || 0) + Number(montoTransferencia || 0);
+  const mixtoValido = Math.abs(totalMixto - Number(cuenta?.total || 0)) < 0.01;
 
   const toggleParaLlevar = async () => {
     setError('');
@@ -153,7 +172,6 @@ export default function VistaCuenta() {
       {error && <div className="form-error">{error}</div>}
 
       <div className="grid grid-cols-2" style={{ alignItems: 'start' }}>
-        {/* Detalle de la cuenta */}
         <div className="card">
           <div className="card-title">Consumo</div>
           {cuenta.detalle.length === 0 ? (
@@ -226,7 +244,7 @@ export default function VistaCuenta() {
                       id="metodo"
                       className="input"
                       value={metodoPago}
-                      onChange={(e) => setMetodoPago(e.target.value)}
+                      onChange={(e) => seleccionarMetodo(e.target.value)}
                     >
                       <option value="EFECTIVO">Efectivo</option>
                       <option value="TRANSFERENCIA">Transferencia</option>
@@ -234,11 +252,52 @@ export default function VistaCuenta() {
                       <option value="MIXTO">Mixto</option>
                     </select>
                   </div>
+
+                  {metodoPago === 'MIXTO' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="field">
+                        <label htmlFor="monto-efectivo">Efectivo</label>
+                        <input
+                          id="monto-efectivo"
+                          className="input"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={montoEfectivo}
+                          onChange={(e) => setMontoEfectivo(e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="monto-transferencia">Transferencia</label>
+                        <input
+                          id="monto-transferencia"
+                          className="input"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={montoTransferencia}
+                          onChange={(e) => setMontoTransferencia(e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
+                      <p className="text-muted text-sm" style={{ gridColumn: '1 / -1' }}>
+                        Total registrado: <strong>{formatoCOP.format(totalMixto)}</strong> ·
+                        {mixtoValido ? ' Cuadra con el total.' : ` Debe ser ${formatoCOP.format(cuenta.total)}.`}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <button className="btn btn-outline" onClick={() => setMostrarCierre(false)} disabled={cerrando}>
                       Cancelar
                     </button>
-                    <button className="btn btn-brick" style={{ flex: 1 }} onClick={confirmarCierre} disabled={cerrando}>
+                    <button
+                      className="btn btn-brick"
+                      style={{ flex: 1 }}
+                      onClick={confirmarCierre}
+                      disabled={cerrando || (metodoPago === 'MIXTO' && !mixtoValido)}
+                    >
                       {cerrando ? 'Cerrando...' : `Confirmar pago de ${formatoCOP.format(cuenta.total)}`}
                     </button>
                   </div>
@@ -248,7 +307,6 @@ export default function VistaCuenta() {
           )}
         </div>
 
-        {/* Catálogo rápido para agregar productos */}
         {estaAbierta && (
           <div className="card">
             <div className="card-title">Agregar producto</div>
