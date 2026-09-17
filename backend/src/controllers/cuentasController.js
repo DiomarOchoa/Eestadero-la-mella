@@ -2,11 +2,6 @@ const { query, getClient } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
-/**
- * GET /api/cuentas?estado=ABIERTA
- * Lista cuentas (por defecto solo abiertas) con el nombre/referencia del cliente.
- * Es el listado que alimenta la pantalla "Cuentas abiertas" en tiempo real.
- */
 const listar = asyncHandler(async (req, res) => {
   const estado = (req.query.estado || 'ABIERTA').toUpperCase();
   const { rows } = await query(
@@ -24,16 +19,12 @@ const listar = asyncHandler(async (req, res) => {
   res.json({ ok: true, cuentas: rows });
 });
 
-/**
- * GET /api/cuentas/:id
- * Detalle completo de una cuenta: cliente, productos, cantidades, subtotales y total.
- */
 const obtener = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const { rows: cuentaRows } = await query(
     `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre, c.metodo_pago,
-            c.para_llevar, c.observaciones,
+            c.para_llevar, c.observaciones, c.caja_turno_id,
             cl.id AS cliente_id, cl.referencia AS cliente_referencia,
             u.nombre_completo AS abierta_por
      FROM cuentas c
@@ -58,11 +49,6 @@ const obtener = asyncHandler(async (req, res) => {
   res.json({ ok: true, cuenta: { ...cuenta, detalle } });
 });
 
-/**
- * POST /api/cuentas
- * Abre una cuenta nueva. Si "clienteId" no viene pero sí "referencia",
- * crea el cliente ligero al vuelo (flujo típico: "abrir cuenta a 'casco negro'").
- */
 const abrir = asyncHandler(async (req, res) => {
   const { clienteId, referencia, observaciones, paraLlevar } = req.body;
 
@@ -91,10 +77,6 @@ const abrir = asyncHandler(async (req, res) => {
 
     const cuentaId = cuentaRows[0].id;
 
-    // Volvemos a consultar la cuenta recién creada, esta vez con el JOIN
-    // a clientes/usuarios, para devolver la misma forma que "listar"/"obtener"
-    // (incluye cliente_referencia). El INSERT ... RETURNING * por sí solo
-    // no trae ese dato porque no hace join con la tabla clientes.
     const { rows: cuentaConCliente } = await client.query(
       `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
               c.metodo_pago, c.para_llevar,
@@ -117,12 +99,6 @@ const abrir = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * POST /api/cuentas/:id/productos
- * Agrega un producto (o suma cantidad) a una cuenta abierta.
- * El precio unitario se congela al momento de agregarlo (precio histórico),
- * así cambios futuros de precio no alteran cuentas ya en curso.
- */
 const agregarProducto = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { productoId, cantidad } = req.body;
@@ -155,10 +131,6 @@ const agregarProducto = asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, item: rows[0] });
 });
 
-/**
- * DELETE /api/cuentas/:id/productos/:itemId
- * Elimina un renglón del detalle de una cuenta abierta.
- */
 const eliminarProducto = asyncHandler(async (req, res) => {
   const { id, itemId } = req.params;
 
@@ -174,10 +146,6 @@ const eliminarProducto = asyncHandler(async (req, res) => {
   res.json({ ok: true, mensaje: 'Producto eliminado de la cuenta.' });
 });
 
-/**
- * PATCH /api/cuentas/:id/productos/:itemId
- * Cambia la cantidad de un renglón existente.
- */
 const actualizarCantidad = asyncHandler(async (req, res) => {
   const { id, itemId } = req.params;
   const { cantidad } = req.body;
@@ -197,12 +165,6 @@ const actualizarCantidad = asyncHandler(async (req, res) => {
   res.json({ ok: true, item: rows[0] });
 });
 
-/**
- * POST /api/cuentas/:id/cerrar
- * Cierra la cuenta: descuenta inventario de forma transaccional,
- * registra el pago (método) y marca la cuenta como CERRADA.
- * Si el stock no alcanza para algún producto, se revierte todo (ROLLBACK).
- */
 const cerrar = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { metodoPago } = req.body;
@@ -215,6 +177,17 @@ const cerrar = asyncHandler(async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+
+    const { rows: turnoRows } = await client.query(
+      `SELECT id FROM caja_turnos
+       WHERE fecha_cierre IS NULL
+       LIMIT 1
+       FOR UPDATE`,
+    );
+    const turno = turnoRows[0];
+    if (!turno) {
+      throw new ApiError(409, 'No hay una caja abierta. Debes abrir la caja antes de registrar pagos.');
+    }
 
     const { rows: cuentaRows } = await client.query(
       'SELECT * FROM cuentas WHERE id = $1 FOR UPDATE', [id]
@@ -231,12 +204,12 @@ const cerrar = asyncHandler(async (req, res) => {
       throw new ApiError(400, 'No se puede cerrar una cuenta sin productos agregados.');
     }
 
-    // Descontar stock producto por producto, validando disponibilidad real.
     for (const item of detalle) {
       const { rows: prodRows } = await client.query(
         'SELECT id, nombre, stock FROM productos WHERE id = $1 FOR UPDATE', [item.producto_id]
       );
       const producto = prodRows[0];
+      if (!producto) throw new ApiError(404, 'Uno de los productos de la cuenta ya no existe.');
       if (producto.stock < item.cantidad) {
         throw new ApiError(409, `Stock insuficiente de "${producto.nombre}" para cerrar la cuenta.`);
       }
@@ -251,10 +224,11 @@ const cerrar = asyncHandler(async (req, res) => {
           estado = 'CERRADA',
           metodo_pago = $1::metodo_pago,
           usuario_cierre_id = $2,
+          caja_turno_id = $3,
           fecha_cierre = NOW()
-       WHERE id = $3
+       WHERE id = $4
        RETURNING *`,
-      [metodoPago.toUpperCase(), req.usuario.id, id]
+      [metodoPago.toUpperCase(), req.usuario.id, turno.id, id]
     );
 
     await client.query('COMMIT');
@@ -267,11 +241,6 @@ const cerrar = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/cuentas/:id
- * Edita datos generales de una cuenta abierta: si es "para llevar" y/o observaciones.
- * No permite editar cuentas ya cerradas.
- */
 const actualizar = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { paraLlevar, observaciones } = req.body;
