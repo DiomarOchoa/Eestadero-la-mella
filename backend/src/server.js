@@ -34,7 +34,9 @@ async function prepararBaseDeDatos() {
 
   await query(`
     ALTER TABLE cuentas
-    ADD COLUMN IF NOT EXISTS caja_turno_id INTEGER REFERENCES caja_turnos(id) ON DELETE RESTRICT
+    ADD COLUMN IF NOT EXISTS caja_turno_id INTEGER REFERENCES caja_turnos(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS monto_efectivo NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS monto_transferencia NUMERIC(12,2)
   `);
 
   await query(`
