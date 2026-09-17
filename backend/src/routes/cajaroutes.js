@@ -31,21 +31,21 @@ const abrir = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'El monto de apertura no es válido.');
   }
 
-  const { rows: abiertas } = await query(
-    'SELECT id FROM caja_turnos WHERE fecha_cierre IS NULL LIMIT 1'
-  );
-  if (abiertas[0]) {
-    throw new ApiError(409, 'Ya existe una caja abierta.');
+  try {
+    const { rows } = await query(
+      `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [req.usuario.id, montoApertura]
+    );
+
+    res.status(201).json({ ok: true, turno: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      throw new ApiError(409, 'Ya existe una caja abierta.');
+    }
+    throw err;
   }
-
-  const { rows } = await query(
-    `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura)
-     VALUES ($1, $2)
-     RETURNING *`,
-    [req.usuario.id, montoApertura]
-  );
-
-  res.status(201).json({ ok: true, turno: rows[0] });
 });
 
 // POST /api/caja/:id/cerrar
@@ -78,9 +78,8 @@ const cerrar = asyncHandler(async (req, res) => {
               COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
        FROM cuentas
        WHERE estado = 'CERRADA'
-         AND fecha_cierre >= $1
-         AND fecha_cierre <= NOW()`,
-      [turno.fecha_apertura]
+         AND caja_turno_id = $1`,
+      [turno.id]
     );
 
     const resumen = resumenRows[0];
