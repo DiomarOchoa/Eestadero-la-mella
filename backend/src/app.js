@@ -31,6 +31,15 @@ app.use(
 
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({
+    ok: true,
+    servicio: 'Estadero La Mella API',
+    estado: 'online',
+    health: '/api/health',
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'Estadero La Mella API', hora: new Date().toISOString() });
 });
