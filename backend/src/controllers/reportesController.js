@@ -70,21 +70,19 @@ const resumen = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/reportes/cuentas-detalle?dias=14
- * Historial de cuentas cerradas, con el nombre/referencia del cliente
- * tal como aparece al abrir la cuenta (ej. "Casco negro", "Mesa 2"),
- * y el detalle de productos consumidos en cada una.
+ * Historial de cuentas cerradas con cliente, atención y productos consumidos.
  */
 const cuentasDetalle = asyncHandler(async (req, res) => {
   const dias = Number(req.query.dias) || 30;
   const { rows } = await query(
     `SELECT c.id,
-            cl.referencia        AS cliente,
+            cl.referencia AS cliente,
             c.total,
             c.metodo_pago,
             c.para_llevar,
             c.fecha_apertura,
             c.fecha_cierre,
-            u.nombre_completo    AS atendido_por,
+            u.nombre_completo AS atendido_por,
             COALESCE(
               (SELECT json_agg(
                         json_build_object(
@@ -112,21 +110,33 @@ const cuentasDetalle = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/reportes/cierre-caja?fecha=YYYY-MM-DD
- * Cuánto vendió cada persona en un día puntual (por defecto, hoy), desglosado
- * por método de pago. Pensado para cuadrar caja al final del turno/día.
+ * Resumen de cuentas cerradas por persona y desglose real de medios de pago.
+ * En pagos mixtos, efectivo y transferencia se toman de sus montos guardados.
  */
 const cierreCaja = asyncHandler(async (req, res) => {
-  const fecha = req.query.fecha || null; // null => CURRENT_DATE en la consulta
+  const fecha = req.query.fecha || null;
 
   const { rows } = await query(
-    `SELECT u.id                    AS usuario_id,
-            u.nombre_completo       AS usuario,
-            COUNT(*)::int           AS cuentas_cerradas,
-            SUM(c.total)            AS total_vendido,
-            SUM(c.total) FILTER (WHERE c.metodo_pago = 'EFECTIVO')      AS total_efectivo,
-            SUM(c.total) FILTER (WHERE c.metodo_pago = 'TRANSFERENCIA') AS total_transferencia,
-            SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA')       AS total_tarjeta,
-            SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO')        AS total_mixto
+    `SELECT u.id AS usuario_id,
+            u.nombre_completo AS usuario,
+            COUNT(*)::int AS cuentas_cerradas,
+            COALESCE(SUM(c.total), 0) AS total_vendido,
+            COALESCE(SUM(
+              CASE
+                WHEN c.metodo_pago = 'EFECTIVO' THEN c.total
+                WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_efectivo, 0)
+                ELSE 0
+              END
+            ), 0) AS total_efectivo,
+            COALESCE(SUM(
+              CASE
+                WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total
+                WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_transferencia, 0)
+                ELSE 0
+              END
+            ), 0) AS total_transferencia,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA'), 0) AS total_tarjeta,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM cuentas c
      JOIN usuarios u ON u.id = c.usuario_cierre_id
      WHERE c.estado = 'CERRADA'
