@@ -10,13 +10,12 @@ router.use(autenticar);
 const resumenPagosSQL = `
   SELECT COUNT(*)::int AS ventas,
          COALESCE(SUM(total), 0) AS total,
-         COALESCE(SUM(CASE WHEN metodo_pago = 'EFECTIVO' THEN total WHEN metodo_pago = 'MIXTO' THEN monto_efectivo ELSE 0 END), 0) AS efectivo,
-         COALESCE(SUM(CASE WHEN metodo_pago = 'TRANSFERENCIA' THEN total WHEN metodo_pago = 'MIXTO' THEN monto_transferencia ELSE 0 END), 0) AS transferencia,
+         COALESCE(SUM(CASE WHEN metodo_pago = 'EFECTIVO' THEN total WHEN metodo_pago = 'MIXTO' THEN COALESCE(monto_efectivo, 0) ELSE 0 END), 0) AS efectivo,
+         COALESCE(SUM(CASE WHEN metodo_pago = 'TRANSFERENCIA' THEN total WHEN metodo_pago = 'MIXTO' THEN COALESCE(monto_transferencia, 0) ELSE 0 END), 0) AS transferencia,
          COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TARJETA'), 0) AS tarjeta,
          COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
   FROM cuentas
-  WHERE estado = 'CERRADA'
-    AND caja_turno_id = $1`;
+  WHERE estado = 'CERRADA' AND caja_turno_id = $1`;
 
 const actual = asyncHandler(async (req, res) => {
   const { rows } = await query(
@@ -27,8 +26,8 @@ const actual = asyncHandler(async (req, res) => {
             u.nombre_completo AS abierta_por,
             COALESCE(SUM(c.total), 0) AS total_ventas,
             COUNT(c.id)::int AS ventas_realizadas,
-            COALESCE(SUM(CASE WHEN c.metodo_pago = 'EFECTIVO' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN c.monto_efectivo ELSE 0 END), 0) AS total_efectivo,
-            COALESCE(SUM(CASE WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN c.monto_transferencia ELSE 0 END), 0) AS total_transferencia,
+            COALESCE(SUM(CASE WHEN c.metodo_pago = 'EFECTIVO' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_efectivo, 0) ELSE 0 END), 0) AS total_efectivo,
+            COALESCE(SUM(CASE WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_transferencia, 0) ELSE 0 END), 0) AS total_transferencia,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA'), 0) AS total_tarjeta,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM caja_turnos ct
@@ -40,44 +39,34 @@ const actual = asyncHandler(async (req, res) => {
   );
 
   const turno = rows[0] || null;
-  if (turno) {
-    turno.monto_esperado = Number(turno.monto_apertura) + Number(turno.total_efectivo);
-  }
-
+  if (turno) turno.monto_esperado = Number(turno.monto_apertura) + Number(turno.total_efectivo);
   res.json({ ok: true, turno });
 });
 
 const abrir = asyncHandler(async (req, res) => {
   const montoApertura = Number(req.body.monto_apertura);
-  if (!Number.isFinite(montoApertura) || montoApertura < 0) {
-    throw new ApiError(400, 'El monto de apertura no es válido.');
-  }
+  if (!Number.isFinite(montoApertura) || montoApertura < 0) throw new ApiError(400, 'El monto de apertura no es válido.');
 
   try {
     const { rows } = await query(
-      `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura)
-       VALUES ($1, $2)
-       RETURNING *`,
+      `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura) VALUES ($1, $2) RETURNING *`,
       [req.usuario.id, montoApertura]
     );
-
     res.status(201).json({ ok: true, turno: rows[0] });
   } catch (err) {
-    if (err.code === '23505') {
-      throw new ApiError(409, 'Ya existe una caja abierta.');
-    }
+    if (err.code === '23505') throw new ApiError(409, 'Ya existe una caja abierta.');
     throw err;
   }
 });
 
 const cerrar = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const id = Number(req.params.id);
   const montoContado = Number(req.body.monto_contado);
-  const observaciones = req.body.observaciones || null;
+  const observaciones = req.body.observaciones ? String(req.body.observaciones).trim() : null;
 
-  if (!Number.isFinite(montoContado) || montoContado < 0) {
-    throw new ApiError(400, 'El efectivo contado no es válido.');
-  }
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'ID de turno inválido.');
+  if (!Number.isFinite(montoContado) || montoContado < 0) throw new ApiError(400, 'El efectivo contado no es válido.');
+  if (observaciones && observaciones.length > 500) throw new ApiError(400, 'Las observaciones no pueden superar 500 caracteres.');
 
   const client = await getClient();
   try {
@@ -89,6 +78,13 @@ const cerrar = asyncHandler(async (req, res) => {
     );
     const turno = turnoRows[0];
     if (!turno) throw new ApiError(404, 'Turno de caja abierto no encontrado.');
+
+    const { rows: abiertas } = await client.query(
+      `SELECT COUNT(*)::int AS total FROM cuentas WHERE estado = 'ABIERTA'`
+    );
+    if (Number(abiertas[0].total) > 0) {
+      throw new ApiError(409, `No puedes cerrar la caja mientras haya ${abiertas[0].total} cuenta(s) abierta(s). Cierra o cobra esas cuentas primero.`);
+    }
 
     const { rows: resumenRows } = await client.query(resumenPagosSQL, [turno.id]);
     const resumen = resumenRows[0];
@@ -145,8 +141,7 @@ const historial = asyncHandler(async (req, res) => {
      FROM caja_turnos ct
      JOIN usuarios ua ON ua.id = ct.usuario_apertura_id
      LEFT JOIN usuarios uc ON uc.id = ct.usuario_cierre_id
-     ORDER BY ct.fecha_apertura DESC
-     LIMIT 100`
+     ORDER BY ct.fecha_apertura DESC LIMIT 100`
   );
   res.json({ ok: true, historial: rows });
 });
