@@ -4,22 +4,31 @@ const ApiError = require('../utils/ApiError');
 
 const TIPOS_VALIDOS = ['CERVEZA', 'BEBIDA', 'SNACK'];
 
-/** GET /api/productos?tipo=&activo=&q= - listar / filtrar productos (para inventario y para agregar a cuentas) */
+/** GET /api/productos?tipo=&activo=&q= - listar / filtrar productos */
 const listar = asyncHandler(async (req, res) => {
   const { tipo, activo, q } = req.query;
   const condiciones = [];
   const params = [];
 
   if (tipo) {
-    params.push(tipo.toUpperCase());
+    const tipoNormalizado = String(tipo).toUpperCase();
+    if (!TIPOS_VALIDOS.includes(tipoNormalizado)) {
+      throw new ApiError(400, `tipo debe ser uno de: ${TIPOS_VALIDOS.join(', ')}`);
+    }
+    params.push(tipoNormalizado);
     condiciones.push(`tipo = $${params.length}::tipo_producto`);
   }
+
   if (activo !== undefined) {
+    if (activo !== 'true' && activo !== 'false') {
+      throw new ApiError(400, 'activo debe ser true o false.');
+    }
     params.push(activo === 'true');
     condiciones.push(`activo = $${params.length}`);
   }
+
   if (q) {
-    params.push(`%${q.toLowerCase()}%`);
+    params.push(`%${String(q).trim().toLowerCase()}%`);
     condiciones.push(`LOWER(nombre) LIKE $${params.length}`);
   }
 
@@ -34,36 +43,57 @@ const listar = asyncHandler(async (req, res) => {
 
 /** POST /api/productos - crear producto */
 const crear = asyncHandler(async (req, res) => {
-  const { nombre, tipo, precio, stock, stockMinimo } = req.body;
+  const nombre = String(req.body.nombre || '').trim();
+  const tipo = String(req.body.tipo || '').toUpperCase();
+  const precio = Number(req.body.precio);
+  const stock = req.body.stock === undefined ? 0 : Number(req.body.stock);
+  const stockMinimo = req.body.stockMinimo === undefined ? 5 : Number(req.body.stockMinimo);
 
-  if (!nombre || !tipo || precio === undefined) {
+  if (!nombre || !tipo || req.body.precio === undefined) {
     throw new ApiError(400, 'nombre, tipo y precio son obligatorios.');
   }
-  if (!TIPOS_VALIDOS.includes(tipo.toUpperCase())) {
+  if (!TIPOS_VALIDOS.includes(tipo)) {
     throw new ApiError(400, `tipo debe ser uno de: ${TIPOS_VALIDOS.join(', ')}`);
   }
-  if (Number(precio) < 0) throw new ApiError(400, 'El precio no puede ser negativo.');
+  if (!Number.isFinite(precio) || precio < 0) throw new ApiError(400, 'El precio no es válido.');
+  if (!Number.isInteger(stock) || stock < 0) throw new ApiError(400, 'El stock debe ser un entero mayor o igual a 0.');
+  if (!Number.isInteger(stockMinimo) || stockMinimo < 0) throw new ApiError(400, 'El stock mínimo debe ser un entero mayor o igual a 0.');
 
   const { rows } = await query(
     `INSERT INTO productos (nombre, tipo, precio, stock, stock_minimo)
-     VALUES ($1, $2::tipo_producto, $3, COALESCE($4, 0), COALESCE($5, 5))
+     VALUES ($1, $2::tipo_producto, $3, $4, $5)
      RETURNING *`,
-    [nombre, tipo.toUpperCase(), precio, stock, stockMinimo]
+    [nombre, tipo, precio, stock, stockMinimo]
   );
 
   res.status(201).json({ ok: true, producto: rows[0] });
 });
 
-/** PATCH /api/productos/:id - editar producto (precio, stock, nombre, activo, etc.) */
+/** PATCH /api/productos/:id - editar producto */
 const actualizar = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const idNum = Number(req.params.id);
   const { nombre, tipo, precio, stock, stockMinimo, activo } = req.body;
 
-  if (tipo && !TIPOS_VALIDOS.includes(tipo.toUpperCase())) {
+  if (!Number.isInteger(idNum) || idNum <= 0) throw new ApiError(400, 'ID de producto inválido.');
+
+  if (tipo !== undefined && !TIPOS_VALIDOS.includes(String(tipo).toUpperCase())) {
     throw new ApiError(400, `tipo debe ser uno de: ${TIPOS_VALIDOS.join(', ')}`);
   }
+  if (nombre !== undefined && !String(nombre).trim()) throw new ApiError(400, 'El nombre no puede estar vacío.');
+  if (precio !== undefined && (!Number.isFinite(Number(precio)) || Number(precio) < 0)) {
+    throw new ApiError(400, 'El precio no es válido.');
+  }
+  if (stock !== undefined && (!Number.isInteger(Number(stock)) || Number(stock) < 0)) {
+    throw new ApiError(400, 'El stock debe ser un entero mayor o igual a 0.');
+  }
+  if (stockMinimo !== undefined && (!Number.isInteger(Number(stockMinimo)) || Number(stockMinimo) < 0)) {
+    throw new ApiError(400, 'El stock mínimo debe ser un entero mayor o igual a 0.');
+  }
+  if (activo !== undefined && typeof activo !== 'boolean') {
+    throw new ApiError(400, 'activo debe ser verdadero o falso.');
+  }
 
-  const { rows: existentes } = await query('SELECT id FROM productos WHERE id = $1', [id]);
+  const { rows: existentes } = await query('SELECT id FROM productos WHERE id = $1', [idNum]);
   if (!existentes[0]) throw new ApiError(404, 'Producto no encontrado.');
 
   const { rows } = await query(
@@ -76,7 +106,15 @@ const actualizar = asyncHandler(async (req, res) => {
         activo = COALESCE($6, activo)
      WHERE id = $7
      RETURNING *`,
-    [nombre, tipo ? tipo.toUpperCase() : null, precio, stock, stockMinimo, activo, id]
+    [
+      nombre === undefined ? null : String(nombre).trim(),
+      tipo === undefined ? null : String(tipo).toUpperCase(),
+      precio === undefined ? null : Number(precio),
+      stock === undefined ? null : Number(stock),
+      stockMinimo === undefined ? null : Number(stockMinimo),
+      activo === undefined ? null : activo,
+      idNum,
+    ]
   );
 
   res.json({ ok: true, producto: rows[0] });
@@ -84,20 +122,18 @@ const actualizar = asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/productos/:id - eliminar producto definitivamente.
- * Solo se permite si el producto nunca ha sido vendido (no tiene renglones
- * en detalle_cuenta). Si ya tiene historial de ventas, se bloquea con un
- * mensaje claro y se sugiere desactivarlo en su lugar (PATCH activo=false),
- * para no romper el historial de cuentas cerradas.
+ * Si tiene historial, se debe desactivar para conservar las ventas anteriores.
  */
 const eliminar = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const idNum = Number(req.params.id);
+  if (!Number.isInteger(idNum) || idNum <= 0) throw new ApiError(400, 'ID de producto inválido.');
 
-  const { rows: existentes } = await query('SELECT id, nombre FROM productos WHERE id = $1', [id]);
+  const { rows: existentes } = await query('SELECT id, nombre FROM productos WHERE id = $1', [idNum]);
   if (!existentes[0]) throw new ApiError(404, 'Producto no encontrado.');
 
   const { rows: enUso } = await query(
     'SELECT 1 FROM detalle_cuenta WHERE producto_id = $1 LIMIT 1',
-    [id]
+    [idNum]
   );
   if (enUso[0]) {
     throw new ApiError(
@@ -107,7 +143,7 @@ const eliminar = asyncHandler(async (req, res) => {
     );
   }
 
-  await query('DELETE FROM productos WHERE id = $1', [id]);
+  await query('DELETE FROM productos WHERE id = $1', [idNum]);
   res.json({ ok: true, mensaje: `"${existentes[0].nombre}" eliminado del inventario.` });
 });
 
