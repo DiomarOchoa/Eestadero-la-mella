@@ -33,8 +33,6 @@ export default function Caja() {
 
   useEffect(() => {
     cargar();
-    const interval = setInterval(cargar, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   const abrir = async (e) => {
