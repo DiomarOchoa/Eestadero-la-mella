@@ -1,14 +1,25 @@
+// backend/src/controllers/productosController.js
+// PATRÓN DE REFERENCIA multi-tenant.
+//
+// Regla de oro: req.negocioId SIEMPRE es el parámetro $1 y SIEMPRE está en el
+// WHERE. Nunca se acepta un negocio_id que venga del body o del query string:
+// solo del token verificado. Replica exactamente este patrón en
+// clientesController, cuentasController, usuariosController, reportesController
+// y cajaroutes.
+
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
 const TIPOS_VALIDOS = ['CERVEZA', 'BEBIDA', 'SNACK'];
 
-/** GET /api/productos?tipo=&activo=&q= - listar / filtrar productos */
+/** GET /api/productos?tipo=&activo=&q= */
 const listar = asyncHandler(async (req, res) => {
   const { tipo, activo, q } = req.query;
-  const condiciones = [];
-  const params = [];
+
+  // $1 reservado para el negocio: el filtro nunca es opcional.
+  const params = [req.negocioId];
+  const condiciones = ['negocio_id = $1'];
 
   if (tipo) {
     const tipoNormalizado = String(tipo).toUpperCase();
@@ -32,16 +43,18 @@ const listar = asyncHandler(async (req, res) => {
     condiciones.push(`LOWER(nombre) LIKE $${params.length}`);
   }
 
-  const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT id, nombre, tipo, precio, stock, stock_minimo, activo, creado_en
-     FROM productos ${where} ORDER BY tipo, nombre`,
+     FROM productos
+     WHERE ${condiciones.join(' AND ')}
+     ORDER BY tipo, nombre`,
     params
   );
+
   res.json({ ok: true, productos: rows });
 });
 
-/** POST /api/productos - crear producto */
+/** POST /api/productos */
 const crear = asyncHandler(async (req, res) => {
   const nombre = String(req.body.nombre || '').trim();
   const tipo = String(req.body.tipo || '').toUpperCase();
@@ -59,17 +72,28 @@ const crear = asyncHandler(async (req, res) => {
   if (!Number.isInteger(stock) || stock < 0) throw new ApiError(400, 'El stock debe ser un entero mayor o igual a 0.');
   if (!Number.isInteger(stockMinimo) || stockMinimo < 0) throw new ApiError(400, 'El stock mínimo debe ser un entero mayor o igual a 0.');
 
+  // Límite por plan: gancho natural para el upsell GRATIS -> BASICO.
+  if (req.negocio?.plan === 'GRATIS') {
+    const { rows: conteo } = await query(
+      'SELECT COUNT(*)::int AS total FROM productos WHERE negocio_id = $1',
+      [req.negocioId]
+    );
+    if (conteo[0].total >= 20) {
+      throw new ApiError(402, 'El plan gratuito permite hasta 20 productos. Mejora tu plan para agregar más.');
+    }
+  }
+
   const { rows } = await query(
-    `INSERT INTO productos (nombre, tipo, precio, stock, stock_minimo)
-     VALUES ($1, $2::tipo_producto, $3, $4, $5)
+    `INSERT INTO productos (negocio_id, nombre, tipo, precio, stock, stock_minimo)
+     VALUES ($1, $2, $3::tipo_producto, $4, $5, $6)
      RETURNING *`,
-    [nombre, tipo, precio, stock, stockMinimo]
+    [req.negocioId, nombre, tipo, precio, stock, stockMinimo]
   );
 
   res.status(201).json({ ok: true, producto: rows[0] });
 });
 
-/** PATCH /api/productos/:id - editar producto */
+/** PATCH /api/productos/:id */
 const actualizar = asyncHandler(async (req, res) => {
   const idNum = Number(req.params.id);
   const { nombre, tipo, precio, stock, stockMinimo, activo } = req.body;
@@ -93,18 +117,17 @@ const actualizar = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'activo debe ser verdadero o falso.');
   }
 
-  const { rows: existentes } = await query('SELECT id FROM productos WHERE id = $1', [idNum]);
-  if (!existentes[0]) throw new ApiError(404, 'Producto no encontrado.');
-
+  // El negocio va en el WHERE del propio UPDATE: si el producto es de otro
+  // local, rowCount = 0 y respondemos 404 (no confirmamos que exista).
   const { rows } = await query(
     `UPDATE productos SET
-        nombre = COALESCE($1, nombre),
-        tipo = COALESCE($2::tipo_producto, tipo),
-        precio = COALESCE($3, precio),
-        stock = COALESCE($4, stock),
+        nombre       = COALESCE($1, nombre),
+        tipo         = COALESCE($2::tipo_producto, tipo),
+        precio       = COALESCE($3, precio),
+        stock        = COALESCE($4, stock),
         stock_minimo = COALESCE($5, stock_minimo),
-        activo = COALESCE($6, activo)
-     WHERE id = $7
+        activo       = COALESCE($6, activo)
+     WHERE id = $7 AND negocio_id = $8
      RETURNING *`,
     [
       nombre === undefined ? null : String(nombre).trim(),
@@ -114,21 +137,23 @@ const actualizar = asyncHandler(async (req, res) => {
       stockMinimo === undefined ? null : Number(stockMinimo),
       activo === undefined ? null : activo,
       idNum,
+      req.negocioId,
     ]
   );
 
+  if (!rows[0]) throw new ApiError(404, 'Producto no encontrado.');
   res.json({ ok: true, producto: rows[0] });
 });
 
-/**
- * DELETE /api/productos/:id - eliminar producto definitivamente.
- * Si tiene historial, se debe desactivar para conservar las ventas anteriores.
- */
+/** DELETE /api/productos/:id */
 const eliminar = asyncHandler(async (req, res) => {
   const idNum = Number(req.params.id);
   if (!Number.isInteger(idNum) || idNum <= 0) throw new ApiError(400, 'ID de producto inválido.');
 
-  const { rows: existentes } = await query('SELECT id, nombre FROM productos WHERE id = $1', [idNum]);
+  const { rows: existentes } = await query(
+    'SELECT id, nombre FROM productos WHERE id = $1 AND negocio_id = $2',
+    [idNum, req.negocioId]
+  );
   if (!existentes[0]) throw new ApiError(404, 'Producto no encontrado.');
 
   const { rows: enUso } = await query(
@@ -143,16 +168,18 @@ const eliminar = asyncHandler(async (req, res) => {
     );
   }
 
-  await query('DELETE FROM productos WHERE id = $1', [idNum]);
+  await query('DELETE FROM productos WHERE id = $1 AND negocio_id = $2', [idNum, req.negocioId]);
   res.json({ ok: true, mensaje: `"${existentes[0].nombre}" eliminado del inventario.` });
 });
 
-/** GET /api/productos/inventario/bajo-stock - productos por debajo del stock mínimo */
+/** GET /api/productos/inventario/bajo-stock */
 const bajoStock = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT id, nombre, tipo, stock, stock_minimo
-     FROM productos WHERE activo = TRUE AND stock <= stock_minimo
-     ORDER BY stock ASC`
+     FROM productos
+     WHERE negocio_id = $1 AND activo = TRUE AND stock <= stock_minimo
+     ORDER BY stock ASC`,
+    [req.negocioId]
   );
   res.json({ ok: true, productos: rows });
 });
