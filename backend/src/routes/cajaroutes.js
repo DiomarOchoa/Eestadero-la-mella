@@ -14,14 +14,27 @@ const actual = asyncHandler(async (req, res) => {
             ct.monto_apertura,
             ct.fecha_apertura,
             ct.usuario_apertura_id,
-            u.nombre_completo AS abierta_por
+            u.nombre_completo AS abierta_por,
+            COALESCE(SUM(c.total), 0) AS total_ventas,
+            COUNT(c.id)::int AS ventas_realizadas,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'EFECTIVO'), 0) AS total_efectivo,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TRANSFERENCIA'), 0) AS total_transferencia,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA'), 0) AS total_tarjeta,
+            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM caja_turnos ct
      JOIN usuarios u ON u.id = ct.usuario_apertura_id
+     LEFT JOIN cuentas c ON c.caja_turno_id = ct.id AND c.estado = 'CERRADA'
      WHERE ct.fecha_cierre IS NULL
+     GROUP BY ct.id, u.nombre_completo
      LIMIT 1`
   );
 
-  res.json({ ok: true, turno: rows[0] || null });
+  const turno = rows[0] || null;
+  if (turno) {
+    turno.monto_esperado = Number(turno.monto_apertura) + Number(turno.total_efectivo);
+  }
+
+  res.json({ ok: true, turno });
 });
 
 // POST /api/caja/abrir
