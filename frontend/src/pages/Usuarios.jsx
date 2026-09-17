@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserPlus, Power, Trash2 } from 'lucide-react';
+import { UserPlus, Power, Trash2, RotateCcw } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -18,9 +18,11 @@ export default function Usuarios() {
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [eliminandoId, setEliminandoId] = useState(null);
+  const [restableciendo, setRestableciendo] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
+    setError('');
     try {
       const data = await api.get('/usuarios');
       setUsuarios(data.usuarios);
@@ -85,6 +87,34 @@ export default function Usuarios() {
     }
   };
 
+  const restablecer = async () => {
+    const confirmado = await confirmar({
+      titulo: 'Restablecer datos del negocio',
+      mensaje: 'Esto eliminará cuentas, ventas, clientes, caja e inventario actuales y cargará los productos de ejemplo. Los usuarios se conservarán. Esta acción no se puede deshacer.',
+      textoConfirmar: 'Continuar',
+      peligro: true,
+    });
+    if (!confirmado) return;
+
+    const texto = window.prompt('Para confirmar, escribe exactamente: RESTABLECER');
+    if (texto === null) return;
+    if (texto.trim().toUpperCase() !== 'RESTABLECER') {
+      toast.error('Restablecimiento cancelado: la confirmación no coincide.');
+      return;
+    }
+
+    setRestableciendo(true);
+    try {
+      const data = await api.post('/usuarios/restablecer-datos', { confirmacion: texto });
+      toast.success(data.mensaje || 'Datos restablecidos correctamente');
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
+    } finally {
+      setRestableciendo(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -93,10 +123,16 @@ export default function Usuarios() {
           <h1>Usuarios</h1>
           <p className="subtitle">Personal con acceso al sistema</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setFormVisible((v) => !v)}>
-          {!formVisible && <UserPlus size={16} />}
-          {formVisible ? 'Cancelar' : 'Nuevo usuario'}
-        </button>
+        <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+          <button className="btn btn-outline" onClick={restablecer} disabled={restableciendo}>
+            <RotateCcw size={16} />
+            {restableciendo ? 'Restableciendo...' : 'Restablecer datos'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setFormVisible((v) => !v)}>
+            {!formVisible && <UserPlus size={16} />}
+            {formVisible ? 'Cancelar' : 'Nuevo usuario'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="form-error">{error}</div>}
@@ -112,7 +148,7 @@ export default function Usuarios() {
             </div>
             <div className="field">
               <label>Usuario</label>
-              <input className="input" required value={form.username}
+              <input className="input" required minLength={3} maxLength={50} value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </div>
             <div className="field">
@@ -162,7 +198,7 @@ export default function Usuarios() {
                   </td>
                   <td>
                     <div className="flex gap-2">
-                      <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(u)}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(u)} disabled={u.id === usuarioActual?.id}>
                         <Power size={14} />
                         {u.activo ? 'Desactivar' : 'Activar'}
                       </button>
