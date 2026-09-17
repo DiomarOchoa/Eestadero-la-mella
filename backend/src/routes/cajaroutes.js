@@ -1,56 +1,152 @@
-const express = require('express');
-const router = express.Router();
+const { Router } = require('express');
+const { query, getClient } = require('../config/db');
+const { autenticar, autorizar } = require('../middleware/auth');
+const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
-let cajaAbierta = true;
-let historialCierres = [];
+const router = Router();
+router.use(autenticar);
 
-// 📦 Obtener estado de caja
-router.get('/estado', (req, res) => {
-  res.json({ ok: true, cajaAbierta });
+// GET /api/caja/actual
+const actual = asyncHandler(async (req, res) => {
+  const { rows } = await query(
+    `SELECT ct.id,
+            ct.monto_apertura,
+            ct.fecha_apertura,
+            ct.usuario_apertura_id,
+            u.nombre_completo AS abierta_por
+     FROM caja_turnos ct
+     JOIN usuarios u ON u.id = ct.usuario_apertura_id
+     WHERE ct.fecha_cierre IS NULL
+     LIMIT 1`
+  );
+
+  res.json({ ok: true, turno: rows[0] || null });
 });
 
-// 🔒 Cerrar caja
-router.post('/cerrar', (req, res) => {
-  if (!cajaAbierta) {
-    return res.status(400).json({ ok: false, mensaje: 'La caja ya está cerrada' });
+// POST /api/caja/abrir
+const abrir = asyncHandler(async (req, res) => {
+  const montoApertura = Number(req.body.monto_apertura);
+  if (!Number.isFinite(montoApertura) || montoApertura < 0) {
+    throw new ApiError(400, 'El monto de apertura no es válido.');
   }
 
-  const resumen = {
-    fecha: new Date(),
-    totalVentas: Math.floor(Math.random() * 500000), // luego conectamos real
-    totalProductos: Math.floor(Math.random() * 100),
-  };
-
-  historialCierres.push(resumen);
-  cajaAbierta = false;
-
-  res.json({
-    ok: true,
-    mensaje: 'Caja cerrada correctamente',
-    resumen,
-  });
-});
-
-// 🔓 Abrir caja
-router.post('/abrir', (req, res) => {
-  if (cajaAbierta) {
-    return res.status(400).json({ ok: false, mensaje: 'La caja ya está abierta' });
+  const { rows: abiertas } = await query(
+    'SELECT id FROM caja_turnos WHERE fecha_cierre IS NULL LIMIT 1'
+  );
+  if (abiertas[0]) {
+    throw new ApiError(409, 'Ya existe una caja abierta.');
   }
 
-  cajaAbierta = true;
+  const { rows } = await query(
+    `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura)
+     VALUES ($1, $2)
+     RETURNING *`,
+    [req.usuario.id, montoApertura]
+  );
 
-  res.json({
-    ok: true,
-    mensaje: 'Caja abierta correctamente',
-  });
+  res.status(201).json({ ok: true, turno: rows[0] });
 });
 
-// 📊 Historial
-router.get('/historial', (req, res) => {
-  res.json({
-    ok: true,
-    historial: historialCierres,
-  });
+// POST /api/caja/:id/cerrar
+const cerrar = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const montoContado = Number(req.body.monto_contado);
+  const observaciones = req.body.observaciones || null;
+
+  if (!Number.isFinite(montoContado) || montoContado < 0) {
+    throw new ApiError(400, 'El efectivo contado no es válido.');
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: turnoRows } = await client.query(
+      `SELECT * FROM caja_turnos WHERE id = $1 AND fecha_cierre IS NULL FOR UPDATE`,
+      [id]
+    );
+    const turno = turnoRows[0];
+    if (!turno) throw new ApiError(404, 'Turno de caja abierto no encontrado.');
+
+    const { rows: resumenRows } = await client.query(
+      `SELECT COUNT(*)::int AS ventas,
+              COALESCE(SUM(total), 0) AS total,
+              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'EFECTIVO'), 0) AS efectivo,
+              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TRANSFERENCIA'), 0) AS transferencia,
+              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TARJETA'), 0) AS tarjeta,
+              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
+       FROM cuentas
+       WHERE estado = 'CERRADA'
+         AND fecha_cierre >= $1
+         AND fecha_cierre <= NOW()`,
+      [turno.fecha_apertura]
+    );
+
+    const resumen = resumenRows[0];
+    const totalVentas = Number(resumen.total);
+    const totalEfectivo = Number(resumen.efectivo);
+    const montoEsperado = Number(turno.monto_apertura) + totalEfectivo;
+    const diferencia = montoContado - montoEsperado;
+
+    const { rows: cerradaRows } = await client.query(
+      `UPDATE caja_turnos SET
+          usuario_cierre_id = $1,
+          monto_esperado = $2,
+          monto_contado = $3,
+          diferencia = $4,
+          total_ventas = $5,
+          ventas_realizadas = $6,
+          total_efectivo = $7,
+          total_transferencia = $8,
+          total_tarjeta = $9,
+          total_mixto = $10,
+          fecha_cierre = NOW(),
+          observaciones = $11
+       WHERE id = $12
+       RETURNING *`,
+      [
+        req.usuario.id,
+        montoEsperado,
+        montoContado,
+        diferencia,
+        totalVentas,
+        Number(resumen.ventas),
+        totalEfectivo,
+        Number(resumen.transferencia),
+        Number(resumen.tarjeta),
+        Number(resumen.mixto),
+        observaciones,
+        id,
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, mensaje: 'Caja cerrada correctamente.', turno: cerradaRows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
+
+// GET /api/caja/historial
+const historial = asyncHandler(async (req, res) => {
+  const { rows } = await query(
+    `SELECT ct.*, ua.nombre_completo AS abierta_por, uc.nombre_completo AS cerrada_por
+     FROM caja_turnos ct
+     JOIN usuarios ua ON ua.id = ct.usuario_apertura_id
+     LEFT JOIN usuarios uc ON uc.id = ct.usuario_cierre_id
+     ORDER BY ct.fecha_apertura DESC
+     LIMIT 100`
+  );
+  res.json({ ok: true, historial: rows });
+});
+
+router.get('/actual', actual);
+router.post('/abrir', autorizar('ADMIN'), abrir);
+router.post('/:id/cerrar', autorizar('ADMIN'), cerrar);
+router.get('/historial', autorizar('ADMIN'), historial);
 
 module.exports = router;
