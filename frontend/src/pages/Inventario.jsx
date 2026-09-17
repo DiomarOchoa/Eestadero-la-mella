@@ -24,11 +24,9 @@ export default function Inventario() {
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
 
-  // CAJA
-  const [cajaAbierta, setCajaAbierta] = useState(false);
-
   const cargar = async () => {
     setCargando(true);
+    setError('');
     try {
       const data = await api.get('/productos');
       setProductos(data.productos);
@@ -39,16 +37,8 @@ export default function Inventario() {
     }
   };
 
-  const cargarCaja = async () => {
-    try {
-      const data = await api.get('/productos/caja'); // ✅ CORREGIDO
-      setCajaAbierta(data.abierta);
-    } catch {}
-  };
-
   useEffect(() => {
     cargar();
-    cargarCaja();
   }, []);
 
   const abrirNuevo = () => {
@@ -73,24 +63,40 @@ export default function Inventario() {
     e.preventDefault();
     setGuardando(true);
     setError('');
+
     try {
       const payload = {
-        nombre: form.nombre,
+        nombre: form.nombre.trim(),
         tipo: form.tipo,
         precio: Number(form.precio),
         stock: Number(form.stock),
         stockMinimo: Number(form.stockMinimo),
       };
 
+      if (!payload.nombre) {
+        throw new Error('El nombre del producto es obligatorio.');
+      }
+      if (!Number.isFinite(payload.precio) || payload.precio < 0) {
+        throw new Error('El precio no es válido.');
+      }
+      if (!Number.isInteger(payload.stock) || payload.stock < 0) {
+        throw new Error('El stock debe ser un número entero mayor o igual a 0.');
+      }
+      if (!Number.isInteger(payload.stockMinimo) || payload.stockMinimo < 0) {
+        throw new Error('El stock mínimo debe ser un número entero mayor o igual a 0.');
+      }
+
       if (editando) {
         await api.patch(`/productos/${editando.id}`, payload);
-        toast.success(`"${form.nombre}" actualizado`);
+        toast.success(`"${payload.nombre}" actualizado`);
       } else {
         await api.post('/productos', payload);
-        toast.success(`"${form.nombre}" agregado`);
+        toast.success(`"${payload.nombre}" agregado`);
       }
 
       setFormVisible(false);
+      setForm(VACIO);
+      setEditando(null);
       await cargar();
     } catch (err) {
       setError(err.message);
@@ -104,34 +110,19 @@ export default function Inventario() {
     try {
       await api.patch(`/productos/${p.id}`, { activo: !p.activo });
       await cargar();
-      toast.success(p.activo ? 'Desactivado' : 'Activado');
+      toast.success(p.activo ? 'Producto desactivado' : 'Producto activado');
     } catch (err) {
       toast.error(err.message);
     }
   };
 
   const eliminarProducto = async (p) => {
-    if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
+    if (!window.confirm(`¿Eliminar "${p.nombre}"?`)) return;
 
     try {
       const res = await api.delete(`/productos/${p.id}`);
       toast.success(res.mensaje || 'Producto eliminado');
       await cargar();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const toggleCaja = async () => {
-    try {
-      if (cajaAbierta) {
-        await api.post('/productos/caja/cerrar'); // ✅ CORREGIDO
-        toast.success('Caja cerrada');
-      } else {
-        await api.post('/productos/caja/abrir'); // ✅ CORREGIDO
-        toast.success('Caja abierta');
-      }
-      cargarCaja();
     } catch (err) {
       toast.error(err.message);
     }
@@ -146,17 +137,11 @@ export default function Inventario() {
           <p className="subtitle">Cervezas, bebidas y snacks</p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-outline" onClick={toggleCaja}>
-            {cajaAbierta ? 'Cerrar caja' : 'Abrir caja'}
+        {esAdmin && (
+          <button className="btn btn-primary" onClick={abrirNuevo}>
+            <PackagePlus size={16} /> Nuevo producto
           </button>
-
-          {esAdmin && (
-            <button className="btn btn-primary" onClick={abrirNuevo}>
-              <PackagePlus size={16} /> Nuevo producto
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {error && <div className="form-error">{error}</div>}
@@ -169,8 +154,9 @@ export default function Inventario() {
 
           <form onSubmit={guardar}>
             <div className="field">
-              <label>Nombre</label>
+              <label htmlFor="nombre-producto">Nombre</label>
               <input
+                id="nombre-producto"
                 className="input"
                 required
                 value={form.nombre}
@@ -180,8 +166,9 @@ export default function Inventario() {
 
             <div className="grid grid-cols-2">
               <div className="field">
-                <label>Tipo</label>
+                <label htmlFor="tipo-producto">Tipo</label>
                 <select
+                  id="tipo-producto"
                   className="input"
                   value={form.tipo}
                   onChange={(e) => setForm({ ...form, tipo: e.target.value })}
@@ -193,30 +180,42 @@ export default function Inventario() {
               </div>
 
               <div className="field">
-                <label>Precio</label>
+                <label htmlFor="precio-producto">Precio</label>
                 <input
+                  id="precio-producto"
                   className="input"
                   type="number"
+                  min="0"
+                  step="1"
+                  required
                   value={form.precio}
                   onChange={(e) => setForm({ ...form, precio: e.target.value })}
                 />
               </div>
 
               <div className="field">
-                <label>Stock</label>
+                <label htmlFor="stock-producto">Stock</label>
                 <input
+                  id="stock-producto"
                   className="input"
                   type="number"
+                  min="0"
+                  step="1"
+                  required
                   value={form.stock}
                   onChange={(e) => setForm({ ...form, stock: e.target.value })}
                 />
               </div>
 
               <div className="field">
-                <label>Stock mínimo</label>
+                <label htmlFor="stock-minimo">Stock mínimo</label>
                 <input
+                  id="stock-minimo"
                   className="input"
                   type="number"
+                  min="0"
+                  step="1"
+                  required
                   value={form.stockMinimo}
                   onChange={(e) => setForm({ ...form, stockMinimo: e.target.value })}
                 />
@@ -224,11 +223,20 @@ export default function Inventario() {
             </div>
 
             <div className="flex gap-2 mt-2">
-              <button type="button" className="btn btn-outline" onClick={() => setFormVisible(false)}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setFormVisible(false);
+                  setEditando(null);
+                  setForm(VACIO);
+                }}
+                disabled={guardando}
+              >
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                Guardar
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={guardando}>
+                {guardando ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </form>
@@ -237,6 +245,18 @@ export default function Inventario() {
 
       {cargando ? (
         <div className="spinner" />
+      ) : productos.length === 0 ? (
+        <div className="empty-state card">
+          <span className="emoji">📦</span>
+          No hay productos registrados.
+          {esAdmin && (
+            <div className="mt-4">
+              <button className="btn btn-primary" onClick={abrirNuevo}>
+                <PackagePlus size={16} /> Agregar primer producto
+              </button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="data-table">
@@ -257,21 +277,28 @@ export default function Inventario() {
                   <td>{p.nombre}</td>
                   <td>{p.tipo}</td>
                   <td>{formatoCOP.format(p.precio)}</td>
-                  <td>{p.stock}</td>
+                  <td>
+                    <span style={{ fontWeight: Number(p.stock) <= Number(p.stock_minimo) ? 700 : 400 }}>
+                      {p.stock}
+                    </span>
+                    {Number(p.stock) <= Number(p.stock_minimo) && (
+                      <span className="text-muted text-sm"> · bajo</span>
+                    )}
+                  </td>
                   <td>{p.activo ? 'Activo' : 'Inactivo'}</td>
 
                   {esAdmin && (
                     <td>
                       <div className="flex gap-2">
-                        <button onClick={() => abrirEditar(p)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(p)} aria-label={`Editar ${p.nombre}`}>
                           <Pencil size={14} />
                         </button>
 
-                        <button onClick={() => toggleActivo(p)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(p)} aria-label={`${p.activo ? 'Desactivar' : 'Activar'} ${p.nombre}`}>
                           <Power size={14} />
                         </button>
 
-                        <button onClick={() => eliminarProducto(p)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => eliminarProducto(p)} aria-label={`Eliminar ${p.nombre}`}>
                           <Trash size={14} />
                         </button>
                       </div>
