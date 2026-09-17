@@ -1,32 +1,41 @@
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
-/**
- * GET /api/reportes/ventas-por-dia?dias=14
- * Total vendido (cuentas cerradas) agrupado por día, últimos N días.
- */
+const obtenerDias = (valor) => {
+  const dias = Number(valor);
+  if (!Number.isInteger(dias) || dias < 1 || dias > 365) {
+    throw new ApiError(400, 'El rango de días debe estar entre 1 y 365.');
+  }
+  return dias;
+};
+
+const obtenerLimite = (valor) => {
+  const limite = Number(valor);
+  if (!Number.isInteger(limite) || limite < 1 || limite > 100) {
+    throw new ApiError(400, 'El límite debe estar entre 1 y 100.');
+  }
+  return limite;
+};
+
 const ventasPorDia = asyncHandler(async (req, res) => {
-  const dias = Number(req.query.dias) || 30;
+  const dias = obtenerDias(req.query.dias || 30);
   const { rows } = await query(
-    `SELECT DATE(fecha_cierre) AS fecha,
-            COUNT(*) AS cuentas_cerradas,
-            SUM(total) AS total_vendido
+    `SELECT (fecha_cierre AT TIME ZONE 'America/Bogota')::date AS fecha,
+            COUNT(*)::int AS cuentas_cerradas,
+            COALESCE(SUM(total), 0) AS total_vendido
      FROM cuentas
      WHERE estado = 'CERRADA'
        AND fecha_cierre >= NOW() - ($1 || ' days')::INTERVAL
-     GROUP BY DATE(fecha_cierre)
+     GROUP BY (fecha_cierre AT TIME ZONE 'America/Bogota')::date
      ORDER BY fecha ASC`,
     [dias]
   );
   res.json({ ok: true, ventasPorDia: rows });
 });
 
-/**
- * GET /api/reportes/productos-mas-vendidos?limite=10
- * Ranking de productos por unidades vendidas (basado en cuentas cerradas).
- */
 const productosMasVendidos = asyncHandler(async (req, res) => {
-  const limite = Number(req.query.limite) || 10;
+  const limite = obtenerLimite(req.query.limite || 10);
   const { rows } = await query(
     `SELECT p.id, p.nombre, p.tipo,
             SUM(d.cantidad) AS unidades_vendidas,
@@ -36,23 +45,21 @@ const productosMasVendidos = asyncHandler(async (req, res) => {
      JOIN cuentas c ON c.id = d.cuenta_id
      WHERE c.estado = 'CERRADA'
      GROUP BY p.id, p.nombre, p.tipo
-     ORDER BY unidades_vendidas DESC
+     ORDER BY unidades_vendidas DESC, p.nombre ASC
      LIMIT $1`,
     [limite]
   );
   res.json({ ok: true, productosMasVendidos: rows });
 });
 
-/**
- * GET /api/reportes/resumen
- * Resumen rápido para el dashboard: cuentas abiertas, ventas de hoy, alertas de stock.
- */
 const resumen = asyncHandler(async (req, res) => {
   const [{ rows: abiertas }, { rows: hoy }, { rows: bajoStock }] = await Promise.all([
     query(`SELECT COUNT(*)::int AS total FROM cuentas WHERE estado = 'ABIERTA'`),
     query(
       `SELECT COALESCE(SUM(total), 0) AS total_hoy, COUNT(*)::int AS cuentas_hoy
-       FROM cuentas WHERE estado = 'CERRADA' AND DATE(fecha_cierre) = CURRENT_DATE`
+       FROM cuentas
+       WHERE estado = 'CERRADA'
+         AND (fecha_cierre AT TIME ZONE 'America/Bogota')::date = (NOW() AT TIME ZONE 'America/Bogota')::date`
     ),
     query(`SELECT COUNT(*)::int AS total FROM productos WHERE activo = TRUE AND stock <= stock_minimo`),
   ]);
@@ -68,17 +75,15 @@ const resumen = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * GET /api/reportes/cuentas-detalle?dias=14
- * Historial de cuentas cerradas con cliente, atención y productos consumidos.
- */
 const cuentasDetalle = asyncHandler(async (req, res) => {
-  const dias = Number(req.query.dias) || 30;
+  const dias = obtenerDias(req.query.dias || 30);
   const { rows } = await query(
     `SELECT c.id,
             cl.referencia AS cliente,
             c.total,
             c.metodo_pago,
+            c.monto_efectivo,
+            c.monto_transferencia,
             c.para_llevar,
             c.fecha_apertura,
             c.fecha_cierre,
@@ -108,50 +113,43 @@ const cuentasDetalle = asyncHandler(async (req, res) => {
   res.json({ ok: true, cuentasDetalle: rows });
 });
 
-/**
- * GET /api/reportes/cierre-caja?fecha=YYYY-MM-DD
- * Resumen de cuentas cerradas por persona y desglose real de medios de pago.
- * En pagos mixtos, efectivo y transferencia se toman de sus montos guardados.
- */
 const cierreCaja = asyncHandler(async (req, res) => {
   const fecha = req.query.fecha || null;
+  if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    throw new ApiError(400, 'La fecha debe tener el formato YYYY-MM-DD.');
+  }
 
   const { rows } = await query(
     `SELECT u.id AS usuario_id,
             u.nombre_completo AS usuario,
             COUNT(*)::int AS cuentas_cerradas,
             COALESCE(SUM(c.total), 0) AS total_vendido,
-            COALESCE(SUM(
-              CASE
-                WHEN c.metodo_pago = 'EFECTIVO' THEN c.total
-                WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_efectivo, 0)
-                ELSE 0
-              END
-            ), 0) AS total_efectivo,
-            COALESCE(SUM(
-              CASE
-                WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total
-                WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_transferencia, 0)
-                ELSE 0
-              END
-            ), 0) AS total_transferencia,
+            COALESCE(SUM(CASE
+              WHEN c.metodo_pago = 'EFECTIVO' THEN c.total
+              WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_efectivo, 0)
+              ELSE 0 END), 0) AS total_efectivo,
+            COALESCE(SUM(CASE
+              WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total
+              WHEN c.metodo_pago = 'MIXTO' THEN COALESCE(c.monto_transferencia, 0)
+              ELSE 0 END), 0) AS total_transferencia,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA'), 0) AS total_tarjeta,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM cuentas c
      JOIN usuarios u ON u.id = c.usuario_cierre_id
      WHERE c.estado = 'CERRADA'
-       AND DATE(c.fecha_cierre) = COALESCE($1::date, CURRENT_DATE)
+       AND (c.fecha_cierre AT TIME ZONE 'America/Bogota')::date = COALESCE($1::date, (NOW() AT TIME ZONE 'America/Bogota')::date)
      GROUP BY u.id, u.nombre_completo
-     ORDER BY total_vendido DESC`,
+     ORDER BY total_vendido DESC, u.nombre_completo ASC`,
     [fecha]
   );
 
   const totalGeneral = rows.reduce((acc, r) => acc + Number(r.total_vendido), 0);
   const cuentasGeneral = rows.reduce((acc, r) => acc + Number(r.cuentas_cerradas), 0);
+  const fechaActualBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
   res.json({
     ok: true,
-    fecha: fecha || new Date().toISOString().slice(0, 10),
+    fecha: fecha || fechaActualBogota,
     porUsuario: rows,
     totales: { totalVendido: totalGeneral, cuentasCerradas: cuentasGeneral },
   });
