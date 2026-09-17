@@ -1,5 +1,6 @@
 const app = require('./app');
 const { query } = require('./config/db');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 4000;
@@ -177,6 +178,25 @@ async function prepararBaseDeDatos() {
   `);
 
   console.log('✅ Estructura de caja verificada.');
+
+  const resultadoUsuarios = await query('SELECT COUNT(*)::INTEGER AS cantidad FROM usuarios');
+
+  if (resultadoUsuarios.rows[0].cantidad === 0) {
+    const username = process.env.INITIAL_ADMIN_USERNAME || 'admin';
+    const password = process.env.INITIAL_ADMIN_PASSWORD || 'admin123';
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await query(
+      `INSERT INTO usuarios (nombre_completo, username, password_hash, rol, activo)
+       VALUES ($1, $2, $3, 'ADMIN', TRUE)`,
+      ['Administrador', username, passwordHash]
+    );
+
+    console.log(`✅ Usuario administrador inicial creado: ${username}`);
+    console.log('⚠️ Cambia la contraseña del administrador después de entrar.');
+  } else {
+    console.log('✅ Ya existen usuarios. No se creó un administrador nuevo.');
+  }
 }
 
 prepararBaseDeDatos()
