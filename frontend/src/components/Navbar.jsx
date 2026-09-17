@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, Sun, Moon, LayoutDashboard, Receipt, PlusCircle, Package, BarChart3, Users } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, LayoutDashboard, Receipt, PlusCircle, Package, BarChart3, Users, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import './Navbar.css';
@@ -24,16 +24,14 @@ export default function Navbar() {
     navigate('/login');
   };
 
-  const links = esAdmin ? [...LINKS, { to: '/usuarios', label: 'Usuarios', icon: Users }] : LINKS;
+  const links = esAdmin
+    ? [...LINKS, { to: '/caja', label: 'Caja', icon: Wallet }, { to: '/usuarios', label: 'Usuarios', icon: Users }]
+    : LINKS;
 
   return (
     <>
       <header className="navbar">
-        <button
-          className="navbar-menu-btn"
-          onClick={() => setMenuAbierto(true)}
-          aria-label="Abrir menú"
-        >
+        <button className="navbar-menu-btn" onClick={() => setMenuAbierto(true)} aria-label="Abrir menú">
           <Menu size={22} />
         </button>
 
@@ -52,25 +50,17 @@ export default function Navbar() {
         </nav>
 
         <div className="navbar-user">
-          <button
-            className="btn btn-ghost btn-sm navbar-theme-btn"
-            onClick={alternarTema}
-            aria-label={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            title={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-          >
+          <button className="btn btn-ghost btn-sm navbar-theme-btn" onClick={alternarTema} aria-label={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} title={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
             {tema === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <div className="navbar-user-info">
             <span className="navbar-user-name">{usuario?.nombreCompleto}</span>
             <span className="navbar-user-role">{usuario?.rol}</span>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={salir}>
-            Salir
-          </button>
+          <button className="btn btn-ghost btn-sm" onClick={salir}>Salir</button>
         </div>
       </header>
 
-      {/* Drawer / menú lateral para móvil */}
       {menuAbierto && (
         <div className="navbar-drawer-overlay" onClick={() => setMenuAbierto(false)}>
           <div className="navbar-drawer" onClick={(e) => e.stopPropagation()}>
@@ -89,13 +79,7 @@ export default function Navbar() {
             </button>
             <nav className="navbar-drawer-links">
               {links.map((l) => (
-                <NavLink
-                  key={l.to}
-                  to={l.to}
-                  end={l.end}
-                  className={({ isActive }) => (isActive ? 'active' : '')}
-                  onClick={() => setMenuAbierto(false)}
-                >
+                <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setMenuAbierto(false)}>
                   <l.icon size={17} />
                   {l.label}
                 </NavLink>
