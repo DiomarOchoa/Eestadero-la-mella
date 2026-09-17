@@ -7,7 +7,17 @@ const ApiError = require('../utils/ApiError');
 const router = Router();
 router.use(autenticar);
 
-// GET /api/caja/actual
+const resumenPagosSQL = `
+  SELECT COUNT(*)::int AS ventas,
+         COALESCE(SUM(total), 0) AS total,
+         COALESCE(SUM(CASE WHEN metodo_pago = 'EFECTIVO' THEN total WHEN metodo_pago = 'MIXTO' THEN monto_efectivo ELSE 0 END), 0) AS efectivo,
+         COALESCE(SUM(CASE WHEN metodo_pago = 'TRANSFERENCIA' THEN total WHEN metodo_pago = 'MIXTO' THEN monto_transferencia ELSE 0 END), 0) AS transferencia,
+         COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TARJETA'), 0) AS tarjeta,
+         COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
+  FROM cuentas
+  WHERE estado = 'CERRADA'
+    AND caja_turno_id = $1`;
+
 const actual = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT ct.id,
@@ -17,8 +27,8 @@ const actual = asyncHandler(async (req, res) => {
             u.nombre_completo AS abierta_por,
             COALESCE(SUM(c.total), 0) AS total_ventas,
             COUNT(c.id)::int AS ventas_realizadas,
-            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'EFECTIVO'), 0) AS total_efectivo,
-            COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TRANSFERENCIA'), 0) AS total_transferencia,
+            COALESCE(SUM(CASE WHEN c.metodo_pago = 'EFECTIVO' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN c.monto_efectivo ELSE 0 END), 0) AS total_efectivo,
+            COALESCE(SUM(CASE WHEN c.metodo_pago = 'TRANSFERENCIA' THEN c.total WHEN c.metodo_pago = 'MIXTO' THEN c.monto_transferencia ELSE 0 END), 0) AS total_transferencia,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'TARJETA'), 0) AS total_tarjeta,
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM caja_turnos ct
@@ -37,7 +47,6 @@ const actual = asyncHandler(async (req, res) => {
   res.json({ ok: true, turno });
 });
 
-// POST /api/caja/abrir
 const abrir = asyncHandler(async (req, res) => {
   const montoApertura = Number(req.body.monto_apertura);
   if (!Number.isFinite(montoApertura) || montoApertura < 0) {
@@ -61,7 +70,6 @@ const abrir = asyncHandler(async (req, res) => {
   }
 });
 
-// POST /api/caja/:id/cerrar
 const cerrar = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const montoContado = Number(req.body.monto_contado);
@@ -82,19 +90,7 @@ const cerrar = asyncHandler(async (req, res) => {
     const turno = turnoRows[0];
     if (!turno) throw new ApiError(404, 'Turno de caja abierto no encontrado.');
 
-    const { rows: resumenRows } = await client.query(
-      `SELECT COUNT(*)::int AS ventas,
-              COALESCE(SUM(total), 0) AS total,
-              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'EFECTIVO'), 0) AS efectivo,
-              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TRANSFERENCIA'), 0) AS transferencia,
-              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TARJETA'), 0) AS tarjeta,
-              COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
-       FROM cuentas
-       WHERE estado = 'CERRADA'
-         AND caja_turno_id = $1`,
-      [turno.id]
-    );
-
+    const { rows: resumenRows } = await client.query(resumenPagosSQL, [turno.id]);
     const resumen = resumenRows[0];
     const totalVentas = Number(resumen.total);
     const totalEfectivo = Number(resumen.efectivo);
@@ -143,7 +139,6 @@ const cerrar = asyncHandler(async (req, res) => {
   }
 });
 
-// GET /api/caja/historial
 const historial = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT ct.*, ua.nombre_completo AS abierta_por, uc.nombre_completo AS cerrada_por
