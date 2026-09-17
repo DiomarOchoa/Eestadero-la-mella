@@ -3,10 +3,6 @@
 -- Sistema de cuentas abiertas por cliente
 -- =========================================================
 
--- Extensión para generar UUIDs si se prefiere en el futuro (no usado por defecto,
--- se dejan IDs seriales por simplicidad y rendimiento en un negocio de este tamaño).
--- CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 BEGIN;
 
 -- ---------------------------------------------------------
@@ -38,7 +34,6 @@ END $$;
 
 -- ---------------------------------------------------------
 -- Tabla: usuarios
--- Usuarios del sistema (empleados/administradores del negocio)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS usuarios (
     id              SERIAL PRIMARY KEY,
@@ -55,22 +50,18 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_rol ON usuarios (rol);
 
 -- ---------------------------------------------------------
 -- Tabla: clientes
--- Clientes "ligeros": solo una referencia flexible (apodo, mesa, nombre)
--- No se exige documento ni datos formales, tal como opera el negocio real.
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS clientes (
     id              SERIAL PRIMARY KEY,
-    referencia      VARCHAR(100)  NOT NULL,     -- ej: "Luis", "El flaco", "Mesa 2"
+    referencia      VARCHAR(100)  NOT NULL,
     notas           VARCHAR(255),
     creado_en       TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
--- Índice para autocompletado / búsqueda rápida por referencia (case-insensitive)
 CREATE INDEX IF NOT EXISTS idx_clientes_referencia_trgm ON clientes (LOWER(referencia));
 
 -- ---------------------------------------------------------
 -- Tabla: productos
--- Catálogo de productos vendidos (cervezas, bebidas, snacks)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS productos (
     id              SERIAL PRIMARY KEY,
@@ -78,7 +69,7 @@ CREATE TABLE IF NOT EXISTS productos (
     tipo            tipo_producto   NOT NULL,
     precio          NUMERIC(10,2)   NOT NULL CHECK (precio >= 0),
     stock           INTEGER         NOT NULL DEFAULT 0 CHECK (stock >= 0),
-    stock_minimo    INTEGER         NOT NULL DEFAULT 5,
+    stock_minimo    INTEGER         NOT NULL DEFAULT 5 CHECK (stock_minimo >= 0),
     activo          BOOLEAN         NOT NULL DEFAULT TRUE,
     creado_en       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     actualizado_en  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
@@ -88,14 +79,46 @@ CREATE INDEX IF NOT EXISTS idx_productos_tipo ON productos (tipo);
 CREATE INDEX IF NOT EXISTS idx_productos_activo ON productos (activo);
 
 -- ---------------------------------------------------------
+-- Tabla: caja_turnos
+-- Una caja abierta por vez. Cada cuenta cerrada queda ligada
+-- al turno en el que fue cobrada.
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS caja_turnos (
+    id                  SERIAL PRIMARY KEY,
+    usuario_apertura_id INTEGER         NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    usuario_cierre_id   INTEGER         REFERENCES usuarios(id) ON DELETE RESTRICT,
+    monto_apertura      NUMERIC(12,2)   NOT NULL DEFAULT 0 CHECK (monto_apertura >= 0),
+    monto_esperado      NUMERIC(12,2),
+    monto_contado       NUMERIC(12,2),
+    diferencia          NUMERIC(12,2),
+    total_ventas        NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    ventas_realizadas   INTEGER         NOT NULL DEFAULT 0,
+    total_efectivo      NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    total_transferencia NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    total_tarjeta       NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    total_mixto         NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    fecha_apertura      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    fecha_cierre        TIMESTAMPTZ,
+    observaciones       VARCHAR(500)
+);
+
+CREATE INDEX IF NOT EXISTS idx_caja_turnos_fecha_apertura
+    ON caja_turnos (fecha_apertura);
+CREATE INDEX IF NOT EXISTS idx_caja_turnos_fecha_cierre
+    ON caja_turnos (fecha_cierre);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_caja_un_turno_abierto
+    ON caja_turnos ((1))
+    WHERE fecha_cierre IS NULL;
+
+-- ---------------------------------------------------------
 -- Tabla: cuentas
--- Núcleo del sistema: cuentas abiertas/cerradas asociadas a un cliente
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cuentas (
     id                  SERIAL PRIMARY KEY,
     cliente_id          INTEGER         NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
     usuario_apertura_id INTEGER         NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
     usuario_cierre_id   INTEGER         REFERENCES usuarios(id) ON DELETE RESTRICT,
+    caja_turno_id       INTEGER         REFERENCES caja_turnos(id) ON DELETE RESTRICT,
     estado              estado_cuenta   NOT NULL DEFAULT 'ABIERTA',
     total               NUMERIC(12,2)   NOT NULL DEFAULT 0 CHECK (total >= 0),
     metodo_pago         metodo_pago,
@@ -108,13 +131,12 @@ CREATE TABLE IF NOT EXISTS cuentas (
 CREATE INDEX IF NOT EXISTS idx_cuentas_estado ON cuentas (estado);
 CREATE INDEX IF NOT EXISTS idx_cuentas_cliente ON cuentas (cliente_id);
 CREATE INDEX IF NOT EXISTS idx_cuentas_fecha_apertura ON cuentas (fecha_apertura);
--- Consulta muy frecuente: "dame las cuentas abiertas ordenadas por apertura"
 CREATE INDEX IF NOT EXISTS idx_cuentas_estado_fecha ON cuentas (estado, fecha_apertura);
 CREATE INDEX IF NOT EXISTS idx_cuentas_para_llevar ON cuentas (para_llevar);
+CREATE INDEX IF NOT EXISTS idx_cuentas_caja_turno ON cuentas (caja_turno_id);
 
 -- ---------------------------------------------------------
 -- Tabla: detalle_cuenta
--- Renglones de productos dentro de cada cuenta
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS detalle_cuenta (
     id                  SERIAL PRIMARY KEY,
@@ -130,10 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_detalle_cuenta_cuenta ON detalle_cuenta (cuenta_i
 CREATE INDEX IF NOT EXISTS idx_detalle_cuenta_producto ON detalle_cuenta (producto_id);
 
 -- ---------------------------------------------------------
--- Función + Trigger: recalcular total de la cuenta automáticamente
--- cada vez que se inserta, actualiza o elimina un renglón del detalle.
--- Esto garantiza que "total" en cuentas SIEMPRE sea consistente con el detalle,
--- sin depender de que el backend lo calcule manualmente.
+-- Función + Trigger: recalcular total de la cuenta
 -- ---------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_recalcular_total_cuenta()
 RETURNS TRIGGER AS $$
@@ -168,7 +187,7 @@ AFTER DELETE ON detalle_cuenta
 FOR EACH ROW EXECUTE FUNCTION fn_recalcular_total_cuenta();
 
 -- ---------------------------------------------------------
--- Trigger genérico para mantener actualizado_en en usuarios/productos
+-- Trigger genérico para mantener actualizado_en
 -- ---------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_actualizar_timestamp()
 RETURNS TRIGGER AS $$
