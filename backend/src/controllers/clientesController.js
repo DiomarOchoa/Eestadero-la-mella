@@ -1,3 +1,6 @@
+// backend/src/controllers/clientesController.js
+// Versión multi-tenant.
+
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -8,14 +11,16 @@ const listar = asyncHandler(async (req, res) => {
   if (q) {
     const { rows } = await query(
       `SELECT id, referencia, notas, creado_en FROM clientes
-       WHERE LOWER(referencia) LIKE $1
+       WHERE negocio_id = $1 AND LOWER(referencia) LIKE $2
        ORDER BY creado_en DESC LIMIT 10`,
-      [`%${q.toLowerCase()}%`]
+      [req.negocioId, `%${q.toLowerCase()}%`]
     );
     return res.json({ ok: true, clientes: rows });
   }
   const { rows } = await query(
-    `SELECT id, referencia, notas, creado_en FROM clientes ORDER BY creado_en DESC LIMIT 100`
+    `SELECT id, referencia, notas, creado_en FROM clientes
+     WHERE negocio_id = $1 ORDER BY creado_en DESC LIMIT 100`,
+    [req.negocioId]
   );
   res.json({ ok: true, clientes: rows });
 });
@@ -28,8 +33,8 @@ const crear = asyncHandler(async (req, res) => {
   }
 
   const { rows } = await query(
-    `INSERT INTO clientes (referencia, notas) VALUES ($1, $2) RETURNING *`,
-    [referencia.trim(), notas || null]
+    `INSERT INTO clientes (negocio_id, referencia, notas) VALUES ($1, $2, $3) RETURNING *`,
+    [req.negocioId, referencia.trim(), notas || null]
   );
   res.status(201).json({ ok: true, cliente: rows[0] });
 });
