@@ -1,3 +1,7 @@
+// backend/src/controllers/reportesController.js
+// Versión multi-tenant: cada consulta filtra por negocio_id, así que los
+// reportes de un negocio nunca mezclan ventas de otro.
+
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -25,11 +29,12 @@ const ventasPorDia = asyncHandler(async (req, res) => {
             COUNT(*)::int AS cuentas_cerradas,
             COALESCE(SUM(total), 0) AS total_vendido
      FROM cuentas
-     WHERE estado = 'CERRADA'
-       AND fecha_cierre >= NOW() - ($1 || ' days')::INTERVAL
+     WHERE negocio_id = $1
+       AND estado = 'CERRADA'
+       AND fecha_cierre >= NOW() - ($2 || ' days')::INTERVAL
      GROUP BY (fecha_cierre AT TIME ZONE 'America/Bogota')::date
      ORDER BY fecha ASC`,
-    [dias]
+    [req.negocioId, dias]
   );
   res.json({ ok: true, ventasPorDia: rows });
 });
@@ -43,25 +48,29 @@ const productosMasVendidos = asyncHandler(async (req, res) => {
      FROM detalle_cuenta d
      JOIN productos p ON p.id = d.producto_id
      JOIN cuentas c ON c.id = d.cuenta_id
-     WHERE c.estado = 'CERRADA'
+     WHERE c.negocio_id = $1 AND c.estado = 'CERRADA'
      GROUP BY p.id, p.nombre, p.tipo
      ORDER BY unidades_vendidas DESC, p.nombre ASC
-     LIMIT $1`,
-    [limite]
+     LIMIT $2`,
+    [req.negocioId, limite]
   );
   res.json({ ok: true, productosMasVendidos: rows });
 });
 
 const resumen = asyncHandler(async (req, res) => {
   const [{ rows: abiertas }, { rows: hoy }, { rows: bajoStock }] = await Promise.all([
-    query(`SELECT COUNT(*)::int AS total FROM cuentas WHERE estado = 'ABIERTA'`),
+    query(`SELECT COUNT(*)::int AS total FROM cuentas WHERE negocio_id = $1 AND estado = 'ABIERTA'`, [req.negocioId]),
     query(
       `SELECT COALESCE(SUM(total), 0) AS total_hoy, COUNT(*)::int AS cuentas_hoy
        FROM cuentas
-       WHERE estado = 'CERRADA'
-         AND (fecha_cierre AT TIME ZONE 'America/Bogota')::date = (NOW() AT TIME ZONE 'America/Bogota')::date`
+       WHERE negocio_id = $1 AND estado = 'CERRADA'
+         AND (fecha_cierre AT TIME ZONE 'America/Bogota')::date = (NOW() AT TIME ZONE 'America/Bogota')::date`,
+      [req.negocioId]
     ),
-    query(`SELECT COUNT(*)::int AS total FROM productos WHERE activo = TRUE AND stock <= stock_minimo`),
+    query(
+      `SELECT COUNT(*)::int AS total FROM productos WHERE negocio_id = $1 AND activo = TRUE AND stock <= stock_minimo`,
+      [req.negocioId]
+    ),
   ]);
 
   res.json({
@@ -105,10 +114,11 @@ const cuentasDetalle = asyncHandler(async (req, res) => {
      FROM cuentas c
      JOIN clientes cl ON cl.id = c.cliente_id
      LEFT JOIN usuarios u ON u.id = c.usuario_cierre_id
-     WHERE c.estado = 'CERRADA'
-       AND c.fecha_cierre >= NOW() - ($1 || ' days')::INTERVAL
+     WHERE c.negocio_id = $1
+       AND c.estado = 'CERRADA'
+       AND c.fecha_cierre >= NOW() - ($2 || ' days')::INTERVAL
      ORDER BY c.fecha_cierre DESC`,
-    [dias]
+    [req.negocioId, dias]
   );
   res.json({ ok: true, cuentasDetalle: rows });
 });
@@ -136,11 +146,12 @@ const cierreCaja = asyncHandler(async (req, res) => {
             COALESCE(SUM(c.total) FILTER (WHERE c.metodo_pago = 'MIXTO'), 0) AS total_mixto
      FROM cuentas c
      JOIN usuarios u ON u.id = c.usuario_cierre_id
-     WHERE c.estado = 'CERRADA'
-       AND (c.fecha_cierre AT TIME ZONE 'America/Bogota')::date = COALESCE($1::date, (NOW() AT TIME ZONE 'America/Bogota')::date)
+     WHERE c.negocio_id = $1
+       AND c.estado = 'CERRADA'
+       AND (c.fecha_cierre AT TIME ZONE 'America/Bogota')::date = COALESCE($2::date, (NOW() AT TIME ZONE 'America/Bogota')::date)
      GROUP BY u.id, u.nombre_completo
      ORDER BY total_vendido DESC, u.nombre_completo ASC`,
-    [fecha]
+    [req.negocioId, fecha]
   );
 
   const totalGeneral = rows.reduce((acc, r) => acc + Number(r.total_vendido), 0);
