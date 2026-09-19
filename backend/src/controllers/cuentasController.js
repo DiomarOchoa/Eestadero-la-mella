@@ -1,3 +1,17 @@
+// backend/src/controllers/cuentasController.js
+// Versión multi-tenant. Regla de oro igual que en productosController:
+// req.negocioId siempre en el WHERE, nunca confiado desde el body/params.
+//
+// Puntos delicados de este archivo (léelos antes de tocar algo):
+// - El turno de caja se busca con negocio_id: cada negocio tiene su propia
+//   caja abierta, no comparten una sola.
+// - El "stock reservado por otras cuentas abiertas" se calcula uniendo
+//   detalle_cuenta -> cuentas y filtrando cuentas.negocio_id, para no mezclar
+//   reservas de dos negocios distintos aunque (en teoría) nunca compartirían
+//   producto_id, porque cada producto ya pertenece a un solo negocio.
+// - detalle_cuenta NO tiene negocio_id propio: su aislamiento depende de que
+//   cuenta_id y producto_id ya hayan sido validados contra negocio_id antes.
+
 const { query, getClient } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -14,9 +28,9 @@ const listar = asyncHandler(async (req, res) => {
      FROM cuentas c
      JOIN clientes cl ON cl.id = c.cliente_id
      JOIN usuarios u ON u.id = c.usuario_apertura_id
-     WHERE c.estado = $1::estado_cuenta
+     WHERE c.negocio_id = $1 AND c.estado = $2::estado_cuenta
      ORDER BY c.fecha_apertura ASC`,
-    [estado]
+    [req.negocioId, estado]
   );
   res.json({ ok: true, cuentas: rows });
 });
@@ -34,8 +48,8 @@ const obtener = asyncHandler(async (req, res) => {
      FROM cuentas c
      JOIN clientes cl ON cl.id = c.cliente_id
      JOIN usuarios u ON u.id = c.usuario_apertura_id
-     WHERE c.id = $1`,
-    [id]
+     WHERE c.id = $1 AND c.negocio_id = $2`,
+    [id, req.negocioId]
   );
   const cuenta = cuentaRows[0];
   if (!cuenta) throw new ApiError(404, 'Cuenta no encontrada.');
@@ -71,27 +85,30 @@ const abrir = asyncHandler(async (req, res) => {
 
     if (!clienteFinalId) {
       const { rows: existentes } = await client.query(
-        `SELECT id FROM clientes WHERE LOWER(referencia) = LOWER($1) ORDER BY id ASC LIMIT 1`,
-        [referencia]
+        `SELECT id FROM clientes WHERE negocio_id = $1 AND LOWER(referencia) = LOWER($2) ORDER BY id ASC LIMIT 1`,
+        [req.negocioId, referencia]
       );
       if (existentes[0]) {
         clienteFinalId = existentes[0].id;
       } else {
         const { rows } = await client.query(
-          `INSERT INTO clientes (referencia) VALUES ($1) RETURNING id`,
-          [referencia]
+          `INSERT INTO clientes (negocio_id, referencia) VALUES ($1, $2) RETURNING id`,
+          [req.negocioId, referencia]
         );
         clienteFinalId = rows[0].id;
       }
     } else {
-      const { rows } = await client.query('SELECT id FROM clientes WHERE id = $1', [clienteFinalId]);
+      const { rows } = await client.query(
+        'SELECT id FROM clientes WHERE id = $1 AND negocio_id = $2',
+        [clienteFinalId, req.negocioId]
+      );
       if (!rows[0]) throw new ApiError(404, 'Cliente no encontrado.');
     }
 
     const { rows: cuentaRows } = await client.query(
-      `INSERT INTO cuentas (cliente_id, usuario_apertura_id, observaciones, para_llevar)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [clienteFinalId, req.usuario.id, observaciones || null, paraLlevar]
+      `INSERT INTO cuentas (negocio_id, cliente_id, usuario_apertura_id, observaciones, para_llevar)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [req.negocioId, clienteFinalId, req.usuario.id, observaciones || null, paraLlevar]
     );
 
     const cuentaId = cuentaRows[0].id;
@@ -103,8 +120,8 @@ const abrir = asyncHandler(async (req, res) => {
        FROM cuentas c
        JOIN clientes cl ON cl.id = c.cliente_id
        JOIN usuarios u ON u.id = c.usuario_apertura_id
-       WHERE c.id = $1`,
-      [cuentaId]
+       WHERE c.id = $1 AND c.negocio_id = $2`,
+      [cuentaId, req.negocioId]
     );
 
     await client.query('COMMIT');
@@ -130,14 +147,17 @@ const agregarProducto = asyncHandler(async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows: cuentaRows } = await client.query('SELECT id, estado FROM cuentas WHERE id = $1 FOR UPDATE', [cuentaId]);
+    const { rows: cuentaRows } = await client.query(
+      'SELECT id, estado FROM cuentas WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+      [cuentaId, req.negocioId]
+    );
     const cuenta = cuentaRows[0];
     if (!cuenta) throw new ApiError(404, 'Cuenta no encontrada.');
     if (cuenta.estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
 
     const { rows: prodRows } = await client.query(
-      'SELECT id, nombre, precio, stock, activo FROM productos WHERE id = $1 FOR UPDATE',
-      [productoId]
+      'SELECT id, nombre, precio, stock, activo FROM productos WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+      [productoId, req.negocioId]
     );
     const producto = prodRows[0];
     if (!producto || !producto.activo) throw new ApiError(404, 'Producto no encontrado o inactivo.');
@@ -146,8 +166,8 @@ const agregarProducto = asyncHandler(async (req, res) => {
       `SELECT COALESCE(SUM(d.cantidad), 0)::int AS reservado
        FROM detalle_cuenta d
        JOIN cuentas c ON c.id = d.cuenta_id
-       WHERE d.producto_id = $1 AND c.estado = 'ABIERTA' AND c.id <> $2`,
-      [productoId, cuentaId]
+       WHERE d.producto_id = $1 AND c.negocio_id = $2 AND c.estado = 'ABIERTA' AND c.id <> $3`,
+      [productoId, req.negocioId, cuentaId]
     );
     const reservadoOtros = Number(reservaRows[0].reservado);
 
@@ -194,7 +214,10 @@ const eliminarProducto = asyncHandler(async (req, res) => {
   const itemId = Number(req.params.itemId);
   if (!Number.isInteger(cuentaId) || !Number.isInteger(itemId)) throw new ApiError(400, 'Identificador inválido.');
 
-  const { rows: cuentaRows } = await query('SELECT estado FROM cuentas WHERE id = $1', [cuentaId]);
+  const { rows: cuentaRows } = await query(
+    'SELECT estado FROM cuentas WHERE id = $1 AND negocio_id = $2',
+    [cuentaId, req.negocioId]
+  );
   if (!cuentaRows[0]) throw new ApiError(404, 'Cuenta no encontrada.');
   if (cuentaRows[0].estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
 
@@ -213,7 +236,10 @@ const actualizarCantidad = asyncHandler(async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
-    const { rows: cuentaRows } = await client.query('SELECT estado FROM cuentas WHERE id = $1 FOR UPDATE', [cuentaId]);
+    const { rows: cuentaRows } = await client.query(
+      'SELECT estado FROM cuentas WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+      [cuentaId, req.negocioId]
+    );
     if (!cuentaRows[0]) throw new ApiError(404, 'Cuenta no encontrada.');
     if (cuentaRows[0].estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
 
@@ -229,8 +255,8 @@ const actualizarCantidad = asyncHandler(async (req, res) => {
     const { rows: reservaRows } = await client.query(
       `SELECT COALESCE(SUM(d.cantidad), 0)::int AS reservado
        FROM detalle_cuenta d JOIN cuentas c ON c.id = d.cuenta_id
-       WHERE d.producto_id = $1 AND c.estado = 'ABIERTA' AND c.id <> $2`,
-      [item.producto_id, cuentaId]
+       WHERE d.producto_id = $1 AND c.negocio_id = $2 AND c.estado = 'ABIERTA' AND c.id <> $3`,
+      [item.producto_id, req.negocioId, cuentaId]
     );
     const reservadoOtros = Number(reservaRows[0].reservado);
     if (reservadoOtros + cantidadNum > Number(item.stock)) {
@@ -269,11 +295,19 @@ const cerrar = asyncHandler(async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows: turnoRows } = await client.query(`SELECT id FROM caja_turnos WHERE fecha_cierre IS NULL LIMIT 1 FOR UPDATE`);
+    // Una sola caja abierta POR NEGOCIO (ver migración 005: el índice único
+    // ahora es (negocio_id) WHERE fecha_cierre IS NULL, ya no global).
+    const { rows: turnoRows } = await client.query(
+      `SELECT id FROM caja_turnos WHERE negocio_id = $1 AND fecha_cierre IS NULL LIMIT 1 FOR UPDATE`,
+      [req.negocioId]
+    );
     const turno = turnoRows[0];
     if (!turno) throw new ApiError(409, 'No hay una caja abierta. Debes abrir la caja antes de registrar pagos.');
 
-    const { rows: cuentaRows } = await client.query('SELECT * FROM cuentas WHERE id = $1 FOR UPDATE', [cuentaId]);
+    const { rows: cuentaRows } = await client.query(
+      'SELECT * FROM cuentas WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+      [cuentaId, req.negocioId]
+    );
     const cuenta = cuentaRows[0];
     if (!cuenta) throw new ApiError(404, 'Cuenta no encontrada.');
     if (cuenta.estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
@@ -290,7 +324,10 @@ const cerrar = asyncHandler(async (req, res) => {
     }
 
     for (const item of detalle) {
-      const { rows: prodRows } = await client.query('SELECT id, nombre, stock FROM productos WHERE id = $1 FOR UPDATE', [item.producto_id]);
+      const { rows: prodRows } = await client.query(
+        'SELECT id, nombre, stock FROM productos WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+        [item.producto_id, req.negocioId]
+      );
       const producto = prodRows[0];
       if (!producto) throw new ApiError(404, 'Uno de los productos de la cuenta ya no existe.');
       if (Number(producto.stock) < Number(item.cantidad)) throw new ApiError(409, `Stock insuficiente de "${producto.nombre}" para cerrar la cuenta.`);
@@ -305,8 +342,8 @@ const cerrar = asyncHandler(async (req, res) => {
           estado = 'CERRADA', metodo_pago = $1::metodo_pago,
           monto_efectivo = $2, monto_transferencia = $3,
           usuario_cierre_id = $4, caja_turno_id = $5, fecha_cierre = NOW()
-       WHERE id = $6 RETURNING *`,
-      [metodoPago, efectivoFinal, transferenciaFinal, req.usuario.id, turno.id, cuentaId]
+       WHERE id = $6 AND negocio_id = $7 RETURNING *`,
+      [metodoPago, efectivoFinal, transferenciaFinal, req.usuario.id, turno.id, cuentaId, req.negocioId]
     );
 
     await client.query('COMMIT');
@@ -323,7 +360,10 @@ const actualizar = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'ID de cuenta inválido.');
   const { paraLlevar, observaciones } = req.body;
-  const { rows: cuentaRows } = await query('SELECT estado FROM cuentas WHERE id = $1', [id]);
+  const { rows: cuentaRows } = await query(
+    'SELECT estado FROM cuentas WHERE id = $1 AND negocio_id = $2',
+    [id, req.negocioId]
+  );
   if (!cuentaRows[0]) throw new ApiError(404, 'Cuenta no encontrada.');
   if (cuentaRows[0].estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya está cerrada.');
 
@@ -333,8 +373,8 @@ const actualizar = asyncHandler(async (req, res) => {
     `UPDATE cuentas SET
        para_llevar = COALESCE($1, para_llevar),
        observaciones = CASE WHEN $2::text IS NULL THEN observaciones ELSE NULLIF($2::text, '') END
-     WHERE id = $3 RETURNING *`,
-    [paraLlevarFinal, observacionesFinal, id]
+     WHERE id = $3 AND negocio_id = $4 RETURNING *`,
+    [paraLlevarFinal, observacionesFinal, id, req.negocioId]
   );
   res.json({ ok: true, cuenta: rows[0] });
 });
