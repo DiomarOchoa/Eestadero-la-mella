@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/authRoutes');
+const negociosRoutes = require('./routes/negociosRoutes');
 const usuariosRoutes = require('./routes/usuariosRoutes');
 const productosRoutes = require('./routes/productosRoutes');
 const clientesRoutes = require('./routes/clientesRoutes');
@@ -45,6 +46,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/negocios', negociosRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/clientes', clientesRoutes);
