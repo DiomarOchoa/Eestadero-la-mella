@@ -1,3 +1,9 @@
+// backend/src/routes/cajaroutes.js
+// Versión multi-tenant. El cambio clave: antes había "una sola caja abierta
+// en todo el sistema" (índice único global). Ahora es una caja abierta POR
+// NEGOCIO — así el negocio B puede tener su caja abierta mientras el A tiene
+// la suya cerrada, sin pisarse.
+
 const { Router } = require('express');
 const { query, getClient } = require('../config/db');
 const { autenticar, autorizar } = require('../middleware/auth');
@@ -15,7 +21,7 @@ const resumenPagosSQL = `
          COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'TARJETA'), 0) AS tarjeta,
          COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'MIXTO'), 0) AS mixto
   FROM cuentas
-  WHERE estado = 'CERRADA' AND caja_turno_id = $1`;
+  WHERE negocio_id = $2 AND estado = 'CERRADA' AND caja_turno_id = $1`;
 
 const actual = asyncHandler(async (req, res) => {
   const { rows } = await query(
@@ -33,9 +39,10 @@ const actual = asyncHandler(async (req, res) => {
      FROM caja_turnos ct
      JOIN usuarios u ON u.id = ct.usuario_apertura_id
      LEFT JOIN cuentas c ON c.caja_turno_id = ct.id AND c.estado = 'CERRADA'
-     WHERE ct.fecha_cierre IS NULL
+     WHERE ct.negocio_id = $1 AND ct.fecha_cierre IS NULL
      GROUP BY ct.id, u.nombre_completo
-     LIMIT 1`
+     LIMIT 1`,
+    [req.negocioId]
   );
 
   const turno = rows[0] || null;
@@ -49,12 +56,12 @@ const abrir = asyncHandler(async (req, res) => {
 
   try {
     const { rows } = await query(
-      `INSERT INTO caja_turnos (usuario_apertura_id, monto_apertura) VALUES ($1, $2) RETURNING *`,
-      [req.usuario.id, montoApertura]
+      `INSERT INTO caja_turnos (negocio_id, usuario_apertura_id, monto_apertura) VALUES ($1, $2, $3) RETURNING *`,
+      [req.negocioId, req.usuario.id, montoApertura]
     );
     res.status(201).json({ ok: true, turno: rows[0] });
   } catch (err) {
-    if (err.code === '23505') throw new ApiError(409, 'Ya existe una caja abierta.');
+    if (err.code === '23505') throw new ApiError(409, 'Ya existe una caja abierta para este negocio.');
     throw err;
   }
 });
@@ -73,20 +80,21 @@ const cerrar = asyncHandler(async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: turnoRows } = await client.query(
-      `SELECT * FROM caja_turnos WHERE id = $1 AND fecha_cierre IS NULL FOR UPDATE`,
-      [id]
+      `SELECT * FROM caja_turnos WHERE id = $1 AND negocio_id = $2 AND fecha_cierre IS NULL FOR UPDATE`,
+      [id, req.negocioId]
     );
     const turno = turnoRows[0];
     if (!turno) throw new ApiError(404, 'Turno de caja abierto no encontrado.');
 
     const { rows: abiertas } = await client.query(
-      `SELECT COUNT(*)::int AS total FROM cuentas WHERE estado = 'ABIERTA'`
+      `SELECT COUNT(*)::int AS total FROM cuentas WHERE negocio_id = $1 AND estado = 'ABIERTA'`,
+      [req.negocioId]
     );
     if (Number(abiertas[0].total) > 0) {
       throw new ApiError(409, `No puedes cerrar la caja mientras haya ${abiertas[0].total} cuenta(s) abierta(s). Cierra o cobra esas cuentas primero.`);
     }
 
-    const { rows: resumenRows } = await client.query(resumenPagosSQL, [turno.id]);
+    const { rows: resumenRows } = await client.query(resumenPagosSQL, [turno.id, req.negocioId]);
     const resumen = resumenRows[0];
     const totalVentas = Number(resumen.total);
     const totalEfectivo = Number(resumen.efectivo);
@@ -107,7 +115,7 @@ const cerrar = asyncHandler(async (req, res) => {
           total_mixto = $10,
           fecha_cierre = NOW(),
           observaciones = $11
-       WHERE id = $12
+       WHERE id = $12 AND negocio_id = $13
        RETURNING *`,
       [
         req.usuario.id,
@@ -122,6 +130,7 @@ const cerrar = asyncHandler(async (req, res) => {
         Number(resumen.mixto),
         observaciones,
         id,
+        req.negocioId,
       ]
     );
 
@@ -141,7 +150,9 @@ const historial = asyncHandler(async (req, res) => {
      FROM caja_turnos ct
      JOIN usuarios ua ON ua.id = ct.usuario_apertura_id
      LEFT JOIN usuarios uc ON uc.id = ct.usuario_cierre_id
-     ORDER BY ct.fecha_apertura DESC LIMIT 100`
+     WHERE ct.negocio_id = $1
+     ORDER BY ct.fecha_apertura DESC LIMIT 100`,
+    [req.negocioId]
   );
   res.json({ ok: true, historial: rows });
 });
