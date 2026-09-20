@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, Sun, Moon, LayoutDashboard, Receipt, PlusCircle, Package, BarChart3, Users, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -17,6 +17,7 @@ export default function Navbar() {
   const { usuario, logout, esAdmin } = useAuth();
   const { tema, alternarTema } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   const salir = () => {
@@ -27,6 +28,17 @@ export default function Navbar() {
   const links = esAdmin
     ? [...LINKS, { to: '/caja', label: 'Caja', icon: Wallet }, { to: '/usuarios', label: 'Usuarios', icon: Users }]
     : LINKS;
+
+  const estaActivo = (ruta) => {
+    if (ruta === '/cuentas') {
+      return (
+        location.pathname === '/cuentas' ||
+        (location.pathname.startsWith('/cuentas/') && location.pathname !== '/cuentas/nueva')
+      );
+    }
+
+    return location.pathname === ruta || location.pathname.startsWith(`${ruta}/`);
+  };
 
   return (
     <>
@@ -42,7 +54,7 @@ export default function Navbar() {
 
         <nav className="navbar-links">
           {links.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+            <NavLink key={l.to} to={l.to} end={l.end} className={estaActivo(l.to) ? 'active' : ''}>
               <l.icon size={15} />
               {l.label}
             </NavLink>
@@ -79,7 +91,7 @@ export default function Navbar() {
             </button>
             <nav className="navbar-drawer-links">
               {links.map((l) => (
-                <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setMenuAbierto(false)}>
+                <NavLink key={l.to} to={l.to} end={l.end} className={estaActivo(l.to) ? 'active' : ''} onClick={() => setMenuAbierto(false)}>
                   <l.icon size={17} />
                   {l.label}
                 </NavLink>
