@@ -96,6 +96,26 @@ export default function VistaCuenta() {
     }
   };
 
+  const cancelarCuenta = async () => {
+    const confirmado = await confirmar({
+      titulo: 'Cancelar cuenta',
+      mensaje: `¿Seguro que deseas cancelar la cuenta de "${cuenta.cliente_referencia}"? No se registrará ninguna venta y la caja no se verá afectada.`,
+      textoConfirmar: 'Sí, cancelar',
+      peligro: true,
+    });
+    if (!confirmado) return;
+
+    setError('');
+    try {
+      await api.post(`/cuentas/${id}/cancelar`);
+      toast.success('Cuenta cancelada. No se registró ninguna venta.');
+      navigate('/cuentas');
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
+    }
+  };
+
   const confirmarCierre = async () => {
     setCerrando(true);
     setError('');
@@ -231,7 +251,12 @@ export default function VistaCuenta() {
 
           {estaAbierta && (
             <div className="mt-4">
-              {!mostrarCierre ? (
+              {cuenta.detalle.length === 0 ? (
+                <button className="btn btn-outline btn-block" onClick={cancelarCuenta}>
+                  <Trash2 size={16} />
+                  Cancelar cuenta
+                </button>
+              ) : !mostrarCierre ? (
                 <button className="btn btn-brick btn-block" onClick={() => setMostrarCierre(true)}>
                   <Lock size={16} />
                   Cerrar cuenta
