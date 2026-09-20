@@ -131,7 +131,7 @@ const me = asyncHandler(async (req, res) => {
     ok: true,
     usuario: {
       id: fila.id,
-      nombre_completo: fila.nombre_completo,
+      nombreCompleto: fila.nombre_completo,
       username: fila.username,
       rol: fila.rol,
       activo: fila.activo,
