@@ -18,7 +18,7 @@ const ApiError = require('../utils/ApiError');
 
 const listar = asyncHandler(async (req, res) => {
   const estado = (req.query.estado || 'ABIERTA').toUpperCase();
-  if (!['ABIERTA', 'CERRADA'].includes(estado)) throw new ApiError(400, 'Estado de cuenta inválido.');
+  if (!['ABIERTA', 'CERRADA', 'CANCELADA'].includes(estado)) throw new ApiError(400, 'Estado de cuenta inválido.');
 
   const { rows } = await query(
     `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
@@ -356,6 +356,48 @@ const cerrar = asyncHandler(async (req, res) => {
   }
 });
 
+const cancelar = asyncHandler(async (req, res) => {
+  const cuentaId = Number(req.params.id);
+  if (!Number.isInteger(cuentaId) || cuentaId <= 0) throw new ApiError(400, 'ID de cuenta inválido.');
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: cuentaRows } = await client.query(
+      'SELECT id, estado, total FROM cuentas WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+      [cuentaId, req.negocioId]
+    );
+    const cuenta = cuentaRows[0];
+
+    if (!cuenta) throw new ApiError(404, 'Cuenta no encontrada.');
+    if (cuenta.estado !== 'ABIERTA') throw new ApiError(409, 'La cuenta ya no está abierta.');
+    if (Number(cuenta.total) !== 0) throw new ApiError(400, 'Solo se puede cancelar una cuenta que no tenga productos.');
+
+    const { rows: detalleRows } = await client.query(
+      'SELECT id FROM detalle_cuenta WHERE cuenta_id = $1 LIMIT 1',
+      [cuentaId]
+    );
+    if (detalleRows[0]) throw new ApiError(400, 'Solo se puede cancelar una cuenta que no tenga productos.');
+
+    const { rows: cancelada } = await client.query(
+      `UPDATE cuentas
+       SET estado = 'CANCELADA', fecha_cierre = NOW(), usuario_cierre_id = $1
+       WHERE id = $2 AND negocio_id = $3
+       RETURNING *`,
+      [req.usuario.id, cuentaId, req.negocioId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, cuenta: cancelada[0], mensaje: 'Cuenta cancelada. No se registró ninguna venta.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 const actualizar = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'ID de cuenta inválido.');
@@ -379,4 +421,4 @@ const actualizar = asyncHandler(async (req, res) => {
   res.json({ ok: true, cuenta: rows[0] });
 });
 
-module.exports = { listar, obtener, abrir, actualizar, agregarProducto, eliminarProducto, actualizarCantidad, cerrar };
+module.exports = { listar, obtener, abrir, actualizar, agregarProducto, eliminarProducto, actualizarCantidad, cerrar, cancelar };
