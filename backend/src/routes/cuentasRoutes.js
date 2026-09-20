@@ -9,6 +9,7 @@ const {
   eliminarProducto,
   actualizarCantidad,
   cerrar,
+  cancelar,
 } = require('../controllers/cuentasController');
 
 const router = Router();
@@ -23,5 +24,6 @@ router.post('/:id/productos', agregarProducto);
 router.patch('/:id/productos/:itemId', actualizarCantidad);
 router.delete('/:id/productos/:itemId', eliminarProducto);
 router.post('/:id/cerrar', cerrar);
+router.post('/:id/cancelar', cancelar);
 
 module.exports = router;
