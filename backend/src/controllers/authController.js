@@ -15,7 +15,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
 // Subdominios que NO son negocios
-const SUBDOMINIOS_RESERVADOS = new Set(['www', 'api', 'app', 'admin', 'localhost']);
+const SUBDOMINIOS_RESERVADOS = new Set(['www', 'api', 'app', 'admin', 'localhost', 'onrender', 'vercel', 'railway']);
 
 function slugDesdeHost(host) {
   if (!host) return null;
@@ -23,6 +23,9 @@ function slugDesdeHost(host) {
   const partes = nombre.split('.');
   if (partes.length < 3) return null;             // tuapp.com -> sin subdominio
   const sub = partes[0].toLowerCase();
+  const dominioPrincipal = partes.slice(-2).join('.').toLowerCase();
+  const plataformas = new Set(['onrender.com', 'vercel.app', 'railway.app']);
+  if (plataformas.has(dominioPrincipal)) return null;
   return SUBDOMINIOS_RESERVADOS.has(sub) ? null : sub;
 }
 
