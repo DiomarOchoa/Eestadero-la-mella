@@ -270,6 +270,7 @@ async function prepararMultiTenant() {
 
 async function prepararBaseDeDatos() {
   await query(esquemaBase);
+  await query(`ALTER TYPE estado_cuenta ADD VALUE IF NOT EXISTS 'CANCELADA'`);
   console.log('✅ Esquema base verificado.');
 
   await prepararMultiTenant();
