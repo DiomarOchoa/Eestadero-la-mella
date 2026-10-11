@@ -32,18 +32,20 @@
 .btn-brick:hover:not(:disabled) { filter: brightness(1.1); }
 
 .btn-outline {
-  background: transparent;
+  background: color-mix(in srgb, var(--color-surface-raised) 60%, transparent);
   color: var(--color-text);
   border: 1px solid var(--color-border);
+  border-radius: 12px;
 }
-.btn-outline:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
+.btn-outline:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent-strong); transform: translateY(-1px); }
 
 .btn-ghost {
   background: transparent;
   color: var(--color-text-muted);
   padding: 6px 10px;
+  border-radius: 10px;
 }
-.btn-ghost:hover:not(:disabled) { color: var(--color-text); }
+.btn-ghost:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-raised); }
 
 .btn-danger { color: var(--color-danger); }
 .btn-danger:hover:not(:disabled) { color: var(--color-danger); background: var(--color-danger-bg); }
@@ -125,12 +127,51 @@
   font-family: var(--font-display);
   font-size: var(--fs-2xl);
   margin-top: var(--space-2);
+  background: linear-gradient(120deg, var(--color-text) 20%, var(--color-accent-strong));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.stat-card .stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 25%, transparent), color-mix(in srgb, var(--color-brick) 22%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   color: var(--color-accent-strong);
+  margin-bottom: var(--space-2);
+}
+.stat-card .stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 .stat-card .stat-hint {
   font-size: var(--fs-xs);
   color: var(--color-text-dim);
   margin-top: var(--space-1);
+}
+.live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--color-success);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.live-dot::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
 /* ---------- Badges de estado ---------- */
@@ -138,17 +179,28 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 100px;
   font-size: var(--fs-xs);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
 }
-.badge-open { background: var(--color-warning-bg); color: var(--color-accent-strong); }
-.badge-closed { background: var(--color-success-bg); color: var(--color-success); }
-.badge-danger { background: var(--color-danger-bg); color: var(--color-danger); }
-.badge-tipo { background: var(--color-surface-raised); color: var(--color-text-muted); }
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.badge-open { background: var(--color-warning-bg); color: var(--color-accent-strong); border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
+.badge-open::before { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+.badge-closed { background: var(--color-success-bg); color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 35%, transparent); }
+.badge-danger { background: var(--color-danger-bg); color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); }
+.badge-tipo { background: var(--color-surface-raised); color: var(--color-text-muted); border-color: var(--color-border); }
+.badge-tipo::before { display: none; }
 
 /* ---------- Formularios ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
@@ -218,19 +270,34 @@ table.data-table { width: 100%; border-collapse: collapse; background: color-mix
 
 .mono { font-family: var(--font-mono); }
 
-/* ---------- Elemento distintivo: la "cuenta" como ticket de barra ---------- */
-/* Simula un tiquete/tab de estadero: borde perforado arriba, papel cálido,
-   marcador de estado como si fuera escrito a mano en el margen. */
+/* ---------- Elemento distintivo: la "cuenta" como ticket premium ---------- */
+/* Tiquete de estadero elevado a objeto de diseño: borde luminoso superior,
+   stub perforado y total con degradado. Ningún inventario genérico se ve así. */
 .ticket {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: 20px;
   box-shadow: var(--shadow-card);
   position: relative;
   padding: var(--space-5);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  overflow: hidden;
+  transition: transform 0.16s ease, box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.ticket::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-brick), var(--color-accent));
+  background-size: 200% 100%;
+}
+a:hover .ticket, .ticket:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  box-shadow: var(--shadow-pop), 0 8px 28px color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 .ticket::before {
   content: '';
@@ -258,10 +325,13 @@ table.data-table { width: 100%; border-collapse: collapse; background: color-mix
   color: var(--color-text-muted);
 }
 .ticket-total {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
-  color: var(--color-accent-strong);
   text-align: right;
+  background: linear-gradient(120deg, var(--color-accent-strong), var(--color-brick-strong));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .ticket-footer {
   display: flex;
@@ -399,8 +469,51 @@ table.data-table { width: 100%; border-collapse: collapse; background: color-mix
   text-align: center;
   padding: var(--space-7) var(--space-4);
   color: var(--color-text-muted);
+  border-radius: 20px;
 }
-.empty-state .emoji { font-size: 2.5rem; display: block; margin-bottom: var(--space-3); }
+.empty-state .emoji { font-size: 3rem; display: block; margin-bottom: var(--space-3); filter: saturate(1.2); }
+
+/* ---------- Toolbar (filtros y búsqueda) ---------- */
+.toolbar {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+.toolbar .input { flex: 1; min-width: 200px; }
+
+/* ---------- Tablas genéricas (.table) ---------- */
+.table-wrap { overflow-x: auto; }
+table.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.table th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  padding: 12px 16px;
+  background: var(--color-bg-alt);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  font-size: var(--fs-sm);
+}
+.table tr:last-child td { border-bottom: none; }
+.table tbody tr { transition: background 0.12s ease; }
+.table tbody tr:hover { background: var(--color-surface-raised); }
 .spinner {
   width: 18px; height: 18px;
   border: 2px solid var(--color-border);

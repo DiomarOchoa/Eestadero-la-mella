@@ -40,8 +40,14 @@ export default function AdminNegocios() {
   };
 
   return (
-    <div className="page">
-      <h1>Administración SaaS</h1>
+    <div>
+      <div className="page-header">
+        <div>
+          <span className="eyebrow">Dueño SaaS</span>
+          <h1>Administración</h1>
+          <p className="subtitle">Todos tus negocios en un solo lugar</p>
+        </div>
+      </div>
       {resumen && (
         <div className="stats">
           <span>Negocios: {resumen.negocios?.total} ({resumen.negocios?.activos} activos)</span>
