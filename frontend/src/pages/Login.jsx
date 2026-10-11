@@ -10,6 +10,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [negocioSlug, setNegocioSlug] = useState(() => slugInicialNegocio());
   const [negocioPublico, setNegocioPublico] = useState(null);
+  const [mostrarNegocio, setMostrarNegocio] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -43,10 +44,13 @@ export default function Login() {
     setError('');
     setCargando(true);
     try {
-      await login(username, password, negocioSlug);
+      await login(username, password, mostrarNegocio ? negocioSlug : '');
       navigate('/');
     } catch (err) {
-      setError(err.message || 'No fue posible iniciar sesión.');
+      const mensaje = err.message || 'No fue posible iniciar sesión.';
+      setError(mensaje);
+      // Solo mostramos el campo negocio cuando el servidor lo exige.
+      if (/varios negocios/i.test(mensaje)) setMostrarNegocio(true);
     } finally {
       setCargando(false);
     }
@@ -63,23 +67,25 @@ export default function Login() {
         {error && <div className="form-error">{error}</div>}
 
         <form onSubmit={onSubmit}>
-          <div className="field">
-            <label htmlFor="negocio">Negocio <span style={{ fontWeight: 400 }}>(solo si te lo pide)</span></label>
-            <input
-              id="negocio"
-              className="input"
-              type="text"
-              placeholder="lamella"
-              autoComplete="organization"
-              value={negocioSlug}
-              onChange={(e) => {
-                setNegocioSlug(e.target.value);
-                try {
-                  localStorage.setItem('lamella_negocio_slug', e.target.value.trim().toLowerCase());
-                } catch {}
-              }}
-            />
-          </div>
+          {mostrarNegocio && (
+            <div className="field">
+              <label htmlFor="negocio">Negocio</label>
+              <input
+                id="negocio"
+                className="input"
+                type="text"
+                placeholder="lamella"
+                autoComplete="organization"
+                value={negocioSlug}
+                onChange={(e) => {
+                  setNegocioSlug(e.target.value);
+                  try {
+                    localStorage.setItem('lamella_negocio_slug', e.target.value.trim().toLowerCase());
+                  } catch {}
+                }}
+              />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="username">Usuario</label>
             <input
