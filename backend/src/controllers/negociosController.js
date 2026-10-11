@@ -125,4 +125,57 @@ const crear = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { crear };
+/**
+ * GET /api/negocios/:slug/publico (público, sin auth)
+ * Devuelve nombre + tema para pintar el login/PWA sin filtrar datos sensibles.
+ */
+const publicoPorSlug = asyncHandler(async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) throw new ApiError(400, 'Slug de negocio inválido.');
+  const { rows } = await require('../config/db').query(
+    `SELECT nombre, slug, color_acento, color_fondo, logo_url
+     FROM negocios WHERE slug = $1 AND activo = TRUE`,
+    [slug]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Ese negocio no existe.');
+  const n = rows[0];
+  res.json({
+    ok: true,
+    negocio: {
+      nombre: n.nombre,
+      slug: n.slug,
+      tema: { acento: n.color_acento, fondo: n.color_fondo, logo: n.logo_url },
+    },
+  });
+});
+
+/**
+ * GET /api/negocios/:slug/manifest.json (público)
+ * Manifiesto PWA por negocio para instalación independiente.
+ */
+const manifestPorSlug = asyncHandler(async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  const { rows } = await require('../config/db').query(
+    `SELECT nombre, slug, color_fondo, color_acento FROM negocios WHERE slug = $1 AND activo = TRUE`,
+    [slug]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Ese negocio no existe.');
+  const n = rows[0];
+  res.json({
+    name: n.nombre,
+    short_name: n.nombre.slice(0, 12),
+    description: `Gestión de cuentas abiertas de ${n.nombre}`,
+    start_url: `/?negocio=${n.slug}`,
+    scope: '/',
+    display: 'standalone',
+    background_color: n.color_fondo || '#14201A',
+    theme_color: n.color_fondo || '#14201A',
+    orientation: 'portrait-primary',
+    icons: [
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    ],
+  });
+});
+
+module.exports = { crear, publicoPorSlug, manifestPorSlug };

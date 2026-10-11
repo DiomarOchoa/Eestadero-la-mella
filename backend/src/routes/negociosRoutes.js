@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
 const validar = require('../middleware/validate');
-const { crear } = require('../controllers/negociosController');
+const { crear, publicoPorSlug, manifestPorSlug } = require('../controllers/negociosController');
 
 const router = Router();
 
@@ -17,5 +17,9 @@ router.post(
   validar,
   crear
 );
+
+// Branding público por negocio (login, PWA). Deben ir ANTES de rutas genéricas.
+router.get('/:slug/manifest.json', manifestPorSlug);
+router.get('/:slug/publico', publicoPorSlug);
 
 module.exports = router;

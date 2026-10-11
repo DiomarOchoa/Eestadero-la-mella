@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import MobileTabBar from './components/MobileTabBar';
 
 import Login from './pages/Login';
+import RegistroNegocio from './pages/RegistroNegocio';
 import Dashboard from './pages/Dashboard';
 import CuentasAbiertas from './pages/CuentasAbiertas';
 import AbrirCuenta from './pages/AbrirCuenta';
@@ -29,6 +30,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/registro" element={<RegistroNegocio />} />
 
         <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
         <Route path="/cuentas" element={<ProtectedRoute><Layout><CuentasAbiertas /></Layout></ProtectedRoute>} />

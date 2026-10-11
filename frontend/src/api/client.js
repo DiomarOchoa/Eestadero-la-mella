@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
  */
 async function request(path, { method = 'GET', body, params } = {}) {
   const token = localStorage.getItem('lamella_token');
+  const negocioSlug = localStorage.getItem('lamella_negocio_slug') || '';
 
   let url = `${API_URL}${path}`;
   if (params) {
@@ -21,6 +22,7 @@ async function request(path, { method = 'GET', body, params } = {}) {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(negocioSlug ? { 'X-Negocio-Slug': negocioSlug } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });

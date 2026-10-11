@@ -14,7 +14,7 @@ const LINKS = [
 ];
 
 export default function Navbar() {
-  const { usuario, logout, esAdmin } = useAuth();
+  const { usuario, negocio, logout, esAdmin } = useAuth();
   const { tema, alternarTema } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,7 +49,7 @@ export default function Navbar() {
 
         <div className="navbar-brand">
           <span className="navbar-mark">🍺</span>
-          <span className="navbar-title">La Mella</span>
+          <span className="navbar-title">{negocio?.nombre || 'La Mella'}</span>
         </div>
 
         <nav className="navbar-links">
