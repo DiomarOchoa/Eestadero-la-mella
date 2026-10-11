@@ -23,19 +23,46 @@ export function registrarSW() {
   }
 }
 
-/** Apunta el manifiesto al negocio actual (PWA con nombre propio por estadero). */
+/** Apunta el manifiesto al negocio actual (PWA con nombre propio por estadero).
+ * Se genera como Blob local (mismo origen) porque Chrome rechaza manifiestos
+ * cross-origen: el backend da los datos y el frontend arma el manifiesto. */
 export function manifiestoParaNegocio(slug) {
   try {
-    let link = document.querySelector('link[rel="manifest"]');
-    if (!link) {
-      link = document.createElement('link');
-      link.setAttribute('rel', 'manifest');
-      document.head.appendChild(link);
+    if (!slug) {
+      const link = document.querySelector('link[rel="manifest"]');
+      if (link) link.setAttribute('href', '/manifest.json');
+      return;
     }
-    link.setAttribute(
-      'href',
-      slug ? `${API_URL}/negocios/${slug}/manifest.json` : '/manifest.json'
-    );
+    fetch(`${API_URL}/negocios/${slug}/publico`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const n = data?.negocio;
+        if (!n) return;
+        const manifest = {
+          name: n.nombre,
+          short_name: String(n.nombre).slice(0, 12),
+          description: `Gestión de cuentas abiertas de ${n.nombre}`,
+          start_url: `/?negocio=${n.slug}`,
+          scope: '/',
+          display: 'standalone',
+          background_color: n.tema?.fondo || '#14201A',
+          theme_color: n.tema?.fondo || '#14201A',
+          orientation: 'portrait-primary',
+          icons: [
+            { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          ],
+        };
+        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        let link = document.querySelector('link[rel="manifest"]');
+        if (!link) {
+          link = document.createElement('link');
+          link.setAttribute('rel', 'manifest');
+          document.head.appendChild(link);
+        }
+        link.setAttribute('href', URL.createObjectURL(blob));
+      })
+      .catch(() => {});
   } catch {}
 }
 
