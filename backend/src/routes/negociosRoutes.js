@@ -1,7 +1,8 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
 const validar = require('../middleware/validate');
-const { crear, publicoPorSlug, manifestPorSlug } = require('../controllers/negociosController');
+const { autenticar, autorizar } = require('../middleware/auth');
+const { crear, publicoPorSlug, manifestPorSlug, actualizarMio } = require('../controllers/negociosController');
 
 const router = Router();
 
@@ -17,6 +18,9 @@ router.post(
   validar,
   crear
 );
+
+// Negocio propio (requiere sesión). VA ANTES de /:slug para no chocar.
+router.patch('/mio', autenticar, autorizar('ADMIN'), actualizarMio);
 
 // Branding público por negocio (login, PWA). Deben ir ANTES de rutas genéricas.
 router.get('/:slug/manifest.json', manifestPorSlug);

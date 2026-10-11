@@ -187,4 +187,47 @@ const manifestPorSlug = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { crear, publicoPorSlug, manifestPorSlug };
+/**
+ * PATCH /api/negocios/mio (ADMIN del negocio)
+ * Personaliza el negocio propio: nombre, colores y logo.
+ */
+const actualizarMio = asyncHandler(async (req, res) => {
+  const nombre = req.body.nombre === undefined ? null : String(req.body.nombre).trim();
+  const colorAcento = req.body.colorAcento === undefined ? null : String(req.body.colorAcento).trim();
+  const colorFondo = req.body.colorFondo === undefined ? null : String(req.body.colorFondo).trim();
+  const logoUrl = req.body.logoUrl === undefined ? null : String(req.body.logoUrl).trim();
+
+  if (nombre !== null && (!nombre || nombre.length > 120)) {
+    throw new ApiError(400, 'El nombre del negocio no es válido (máximo 120 caracteres).');
+  }
+  for (const [etiqueta, color] of [['colorAcento', colorAcento], ['colorFondo', colorFondo]]) {
+    if (color !== null && color !== '' && !/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(color)) {
+      throw new ApiError(400, `${etiqueta} debe ser un color HEX como #E3A23C.`);
+    }
+  }
+  if (logoUrl !== null && logoUrl !== '' && logoUrl.length > 300) {
+    throw new ApiError(400, 'La URL del logo es muy larga.');
+  }
+
+  const { rows } = await require('../config/db').query(
+    `UPDATE negocios SET
+       nombre = COALESCE(NULLIF($1, ''), nombre),
+       color_acento = NULLIF($2, ''),
+       color_fondo = NULLIF($3, ''),
+       logo_url = NULLIF($4, '')
+     WHERE id = $5
+     RETURNING id, nombre, slug, plan, color_acento, color_fondo, logo_url`,
+    [nombre, colorAcento, colorFondo, logoUrl, req.negocioId]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Negocio no encontrado.');
+  const n = rows[0];
+  res.json({
+    ok: true,
+    negocio: {
+      id: n.id, nombre: n.nombre, slug: n.slug, plan: n.plan,
+      tema: { acento: n.color_acento, fondo: n.color_fondo, logo: n.logo_url },
+    },
+  });
+});
+
+module.exports = { crear, publicoPorSlug, manifestPorSlug, actualizarMio };

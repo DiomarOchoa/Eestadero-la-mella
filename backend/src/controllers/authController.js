@@ -184,4 +184,48 @@ const me = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { login, me, resolverNegocio };
+/**
+ * PATCH /api/auth/password (autenticado, cualquier rol)
+ * Cambia la contraseña propia verificando la actual.
+ * Body: { actual, nueva }
+ */
+const cambiarPassword = asyncHandler(async (req, res) => {
+  const actual = String(req.body.actual || '');
+  const nueva = String(req.body.nueva || '');
+  if (!actual || !nueva) throw new ApiError(400, 'Debes indicar la contraseña actual y la nueva.');
+  if (nueva.length < 6) throw new ApiError(400, 'La nueva contraseña debe tener al menos 6 caracteres.');
+
+  const { rows } = await query('SELECT password_hash FROM usuarios WHERE id = $1 AND negocio_id = $2', [
+    req.usuario.id,
+    req.negocioId,
+  ]);
+  if (!rows[0]) throw new ApiError(404, 'Usuario no encontrado.');
+  const valida = await bcrypt.compare(actual, rows[0].password_hash);
+  if (!valida) throw new ApiError(401, 'La contraseña actual no es correcta.');
+
+  const hash = await bcrypt.hash(nueva, 10);
+  await query('UPDATE usuarios SET password_hash = $1 WHERE id = $2 AND negocio_id = $3', [
+    hash,
+    req.usuario.id,
+    req.negocioId,
+  ]);
+  res.json({ ok: true, mensaje: 'Contraseña actualizada.' });
+});
+
+/**
+ * PATCH /api/auth/perfil (autenticado, cualquier rol)
+ * Actualiza el nombre completo propio. Body: { nombreCompleto }
+ */
+const actualizarPerfil = asyncHandler(async (req, res) => {
+  const nombreCompleto = String(req.body.nombreCompleto || '').trim();
+  if (!nombreCompleto) throw new ApiError(400, 'El nombre no puede estar vacío.');
+  const { rows } = await query(
+    `UPDATE usuarios SET nombre_completo = $1 WHERE id = $2 AND negocio_id = $3
+     RETURNING id, nombre_completo, username, rol`,
+    [nombreCompleto, req.usuario.id, req.negocioId]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Usuario no encontrado.');
+  res.json({ ok: true, usuario: rows[0] });
+});
+
+module.exports = { login, me, resolverNegocio, cambiarPassword, actualizarPerfil };

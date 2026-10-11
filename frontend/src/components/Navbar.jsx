@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, Sun, Moon, LayoutDashboard, Receipt, PlusCircle, Package, BarChart3, Users, Wallet, Gem } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, LayoutDashboard, Receipt, PlusCircle, Package, BarChart3, Users, Wallet, Gem, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import './Navbar.css';
@@ -30,6 +30,7 @@ export default function Navbar() {
     { to: '/planes', label: 'Planes', icon: Gem },
     ...(esAdmin ? [{ to: '/caja', label: 'Caja', icon: Wallet }, { to: '/usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(esSuperAdmin ? [{ to: '/admin/negocios', label: 'SaaS', icon: BarChart3 }] : []),
+    { to: '/ajustes', label: 'Ajustes', icon: Settings },
   ];
 
   const estaActivo = (ruta) => {
