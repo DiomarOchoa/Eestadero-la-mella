@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api/client';
 
 export default function AdminNegocios() {
@@ -7,6 +7,9 @@ export default function AdminNegocios() {
   const [resumen, setResumen] = useState(null);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(null);
+  const [expandido, setExpandido] = useState(null);
+  const [usuariosPorNegocio, setUsuariosPorNegocio] = useState({});
+  const [cargandoUsuarios, setCargandoUsuarios] = useState(null);
 
   const cargar = async () => {
     setError('');
@@ -27,15 +30,21 @@ export default function AdminNegocios() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const actualizar = async (id, cambios) => {
-    setGuardando(id);
+  const alternarUsuarios = async (n) => {
+    if (expandido === n.id) {
+      setExpandido(null);
+      return;
+    }
+    setExpandido(n.id);
+    if (usuariosPorNegocio[n.id]) return;
+    setCargandoUsuarios(n.id);
     try {
-      await api.patch(`/admin/negocios/${id}`, cambios);
-      await cargar();
+      const data = await api.get(`/admin/negocios/${n.id}/usuarios`);
+      setUsuariosPorNegocio((m) => ({ ...m, [n.id]: data.usuarios || [] }));
     } catch (e) {
       setError(e.message);
     } finally {
-      setGuardando(null);
+      setCargandoUsuarios(null);
     }
   };
 
@@ -49,6 +58,8 @@ export default function AdminNegocios() {
       setError(e.message);
     }
   };
+
+  const actualizar = async (id, cambios) => {
     setGuardando(id);
     try {
       await api.patch(`/admin/negocios/${id}`, cambios);
@@ -103,8 +114,13 @@ export default function AdminNegocios() {
         </thead>
         <tbody>
           {negocios.map((n) => (
-            <tr key={n.id}>
-              <td>{n.nombre}</td>
+            <Fragment key={n.id}>
+              <tr key={n.id}>
+                <td>
+                  <button className="btn btn-ghost btn-sm" onClick={() => alternarUsuarios(n)} title="Ver usuarios">
+                    {expandido === n.id ? '▾' : '▸'} {n.nombre}
+                  </button>
+                </td>
               <td>{n.slug}</td>
               <td>
                 <select
@@ -155,6 +171,39 @@ export default function AdminNegocios() {
                 </div>
               </td>
             </tr>
+              {expandido === n.id && (
+                <tr key={`${n.id}-usuarios`}>
+                  <td colSpan={7}>
+                    {cargandoUsuarios === n.id ? (
+                      <div className="spinner" />
+                    ) : (usuariosPorNegocio[n.id] || []).length === 0 ? (
+                      <span className="text-muted text-sm">Sin usuarios.</span>
+                    ) : (
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Nombre</th>
+                            <th>Usuario</th>
+                            <th>Rol</th>
+                            <th>Activo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(usuariosPorNegocio[n.id] || []).map((u) => (
+                            <tr key={u.id}>
+                              <td>{u.nombre_completo}</td>
+                              <td className="mono">{u.username}</td>
+                              <td><span className="badge badge-tipo">{u.rol}</span></td>
+                              <td>{u.activo ? 'Sí' : 'No'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

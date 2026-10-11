@@ -168,4 +168,21 @@ const eliminarNegocio = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio };
+/**
+ * GET /api/admin/negocios/:id/usuarios (solo superadmin)
+ * Usuarios de un negocio para el panel SaaS (filas expandibles).
+ */
+const usuariosPorNegocio = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'ID de negocio inválido.');
+  const { rows: neg } = await query('SELECT id, nombre, slug FROM negocios WHERE id = $1', [id]);
+  if (!neg[0]) throw new ApiError(404, 'Negocio no encontrado.');
+  const { rows } = await query(
+    `SELECT id, nombre_completo, username, rol, activo, creado_en
+     FROM usuarios WHERE negocio_id = $1 ORDER BY creado_en DESC`,
+    [id]
+  );
+  res.json({ ok: true, negocio: neg[0], usuarios: rows });
+});
+
+module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio, usuariosPorNegocio };
