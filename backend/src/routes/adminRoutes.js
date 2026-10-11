@@ -1,11 +1,14 @@
 const { Router } = require('express');
 const { autenticar, soloSuperAdmin } = require('../middleware/auth');
-const { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio, usuariosPorNegocio } = require('../controllers/adminController');
+const { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio, usuariosPorNegocio, recuperar } = require('../controllers/adminController');
 
 const router = Router();
 
 // Un solo uso, sin auth (verificado por secreto + "solo si no hay superadmin").
 router.post('/bootstrap', bootstrap);
+
+// Emergencias con secreto (verificado por ADMIN_SETUP_SECRET).
+router.post('/recuperar', recuperar);
 
 router.use(autenticar, soloSuperAdmin);
 

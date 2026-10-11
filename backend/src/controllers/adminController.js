@@ -185,4 +185,63 @@ const usuariosPorNegocio = asyncHandler(async (req, res) => {
   res.json({ ok: true, negocio: neg[0], usuarios: rows });
 });
 
-module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio, usuariosPorNegocio };
+/**
+ * POST /api/admin/recuperar (público con secreto, solo emergencias)
+ * Recupera acceso de un SUPERADMIN sin necesitar Shell ni DB directa.
+ * Body: { setupSecret, username, nuevoPassword?, reactivarSlug? }
+ * - setupSecret debe igualar ADMIN_SETUP_SECRET.
+ * - Solo opera sobre usuarios con rol SUPERADMIN.
+ * - nuevoPassword (8+): cambia clave y reactiva el usuario.
+ * - reactivarSlug: reactiva el negocio (por si se desactivó por error).
+ * Tras usarlo, BORRA ADMIN_SETUP_SECRET y redeploya.
+ */
+const recuperar = asyncHandler(async (req, res) => {
+  const esperado = process.env.ADMIN_SETUP_SECRET || '';
+  if (!esperado) throw new ApiError(500, 'Recuperación no configurada (ADMIN_SETUP_SECRET).');
+  if (String(req.body.setupSecret || '') !== esperado) {
+    throw new ApiError(401, 'Secreto de instalación inválido.');
+  }
+  const username = String(req.body.username || '').trim().toLowerCase();
+  if (!username) throw new ApiError(400, 'username es obligatorio.');
+
+  const { rows } = await query(
+    `SELECT u.id, u.rol, u.activo, n.slug AS negocio_slug, n.activo AS negocio_activo
+     FROM usuarios u JOIN negocios n ON n.id = u.negocio_id
+     WHERE LOWER(u.username) = $1 AND u.rol = 'SUPERADMIN' LIMIT 1`,
+    [username]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Superadmin no encontrado.');
+  const cambios = [];
+
+  const nuevoPassword = String(req.body.nuevoPassword || '');
+  if (nuevoPassword) {
+    if (nuevoPassword.length < 8) throw new ApiError(400, 'nuevoPassword de al menos 8 caracteres.');
+    const hash = await bcrypt.hash(nuevoPassword, 10);
+    await query('UPDATE usuarios SET password_hash = $1, activo = TRUE WHERE id = $2', [hash, rows[0].id]);
+    cambios.push('clave restablecida');
+  }
+
+  const reactivarSlug = String(req.body.reactivarSlug || '').trim().toLowerCase();
+  if (reactivarSlug) {
+    const { rows: up } = await query(
+      'UPDATE negocios SET activo = TRUE WHERE slug = $1 RETURNING slug',
+      [reactivarSlug]
+    );
+    if (!up[0]) throw new ApiError(404, 'Negocio a reactivar no encontrado.');
+    cambios.push(`negocio ${up[0].slug} reactivado`);
+  }
+
+  if (!cambios.length) {
+    return res.json({
+      ok: true,
+      diagnostico: {
+        usuarioActivo: rows[0].activo,
+        negocio: rows[0].negocio_slug,
+        negocioActivo: rows[0].negocio_activo,
+      },
+    });
+  }
+  res.json({ ok: true, cambios });
+});
+
+module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio, usuariosPorNegocio, recuperar };
