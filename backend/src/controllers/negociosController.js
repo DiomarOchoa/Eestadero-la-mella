@@ -161,19 +161,23 @@ const manifestPorSlug = asyncHandler(async (req, res) => {
   );
   if (!rows[0]) throw new ApiError(404, 'Ese negocio no existe.');
   const n = rows[0];
+  // URLs absolutas al frontend: el manifiesto se lee cross-origen y los
+  // iconos/start_url relativos se resolverían contra el backend (rotos).
+  const base = String(process.env.FRONTEND_URL || '').split(',')[0].trim().replace(/\/$/, '');
   res.json({
     name: n.nombre,
     short_name: n.nombre.slice(0, 12),
     description: `Gestión de cuentas abiertas de ${n.nombre}`,
-    start_url: `/?negocio=${n.slug}`,
-    scope: '/',
+    start_url: `${base}/?negocio=${n.slug}`,
+    scope: `${base}/`,
+    id: `${base}/?negocio=${n.slug}`,
     display: 'standalone',
     background_color: n.color_fondo || '#14201A',
     theme_color: n.color_fondo || '#14201A',
     orientation: 'portrait-primary',
     icons: [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      { src: `${base}/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `${base}/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
     ],
   });
 });
