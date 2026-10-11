@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
@@ -20,10 +20,11 @@ import Usuarios from './pages/Usuarios';
 import Caja from './pages/Caja';
 
 function Layout({ children }) {
+  const location = useLocation();
   return (
     <div className="app-shell">
       <Navbar />
-      <main className="app-main">
+      <main key={location.pathname} className="app-main page-enter">
         <InstallBanner />
         {children}
       </main>
