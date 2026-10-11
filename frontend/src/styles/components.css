@@ -641,3 +641,107 @@ table.table {
   from { transform: scale(0.94) translateY(6px); opacity: 0; }
   to { transform: scale(1) translateY(0); opacity: 1; }
 }
+
+/* ---------- Planes / precios ---------- */
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .plans-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+}
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: 22px;
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.16s ease, box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.plan-card:hover { transform: translateY(-4px); }
+.plan-featured {
+  border: 1.5px solid var(--color-accent);
+  box-shadow: var(--shadow-pop), 0 10px 36px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+@media (min-width: 901px) {
+  .plan-featured { transform: scale(1.04); }
+  .plan-featured:hover { transform: scale(1.04) translateY(-4px); }
+}
+.plan-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.plan-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.plan-price {
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  line-height: 1;
+  background: linear-gradient(120deg, var(--color-text) 20%, var(--color-accent-strong));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.plan-per { font-size: var(--fs-sm); color: var(--color-text-muted); }
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.plan-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-sm);
+}
+.plan-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.plan-trial-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 16%, transparent), color-mix(in srgb, var(--color-brick) 14%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: 18px;
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 8px 16px 8px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.back-btn:hover { border-color: var(--color-accent); transform: translateX(-2px); }
