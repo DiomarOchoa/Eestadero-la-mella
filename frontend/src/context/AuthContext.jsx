@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from '../api/client';
+import { manifiestoParaNegocio } from '../utils/pwa';
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'lamella_token';
@@ -71,6 +72,7 @@ export function AuthProvider({ children }) {
         setUsuario(data.usuario);
         setNegocio(data.negocio || null);
         if (data.negocio?.slug) localStorage.setItem(NEGOCIO_KEY, data.negocio.slug);
+        manifiestoParaNegocio(data.negocio?.slug || '');
         aplicarTema(data.negocio?.tema);
       })
       .catch(() => {
@@ -108,6 +110,7 @@ export function AuthProvider({ children }) {
     }
     localStorage.setItem(TOKEN_KEY, data.token);
     if (data.negocio?.slug) localStorage.setItem(NEGOCIO_KEY, data.negocio.slug);
+    manifiestoParaNegocio(data.negocio?.slug || '');
     setUsuario(data.usuario);
     setNegocio(data.negocio || null);
     // /auth/login no devuelve tema; lo completamos con /auth/me

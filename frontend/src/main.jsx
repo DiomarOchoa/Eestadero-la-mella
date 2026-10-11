@@ -7,6 +7,12 @@ import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import './styles/global.css';
 import './styles/components.css';
+import { registrarSW, manifiestoParaNegocio } from './utils/pwa';
+
+registrarSW();
+try {
+  manifiestoParaNegocio(localStorage.getItem('lamella_negocio_slug') || '');
+} catch {}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import MobileTabBar from './components/MobileTabBar';
+import InstallBanner from './components/InstallBanner';
 
 import Login from './pages/Login';
 import RegistroNegocio from './pages/RegistroNegocio';
@@ -22,7 +23,10 @@ function Layout({ children }) {
   return (
     <div className="app-shell">
       <Navbar />
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        <InstallBanner />
+        {children}
+      </main>
       <MobileTabBar />
     </div>
   );

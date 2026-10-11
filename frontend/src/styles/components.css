@@ -642,6 +642,20 @@ table.table {
   to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
+/* ---------- Banner instalar PWA ---------- */
+.pwa-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 16%, transparent), color-mix(in srgb, var(--color-brick) 14%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: 18px;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.pwa-banner-text { display: flex; flex-direction: column; flex: 1; }
+.pwa-banner-text span { font-size: var(--fs-sm); color: var(--color-text-muted); }
+
 /* ---------- Planes / precios ---------- */
 .plans-grid {
   display: grid;
