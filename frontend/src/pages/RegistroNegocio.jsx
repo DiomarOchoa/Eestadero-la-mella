@@ -7,7 +7,6 @@ export default function RegistroNegocio() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     nombreNegocio: '',
-    slug: '',
     nombreCompleto: '',
     username: '',
     password: '',
@@ -27,7 +26,6 @@ export default function RegistroNegocio() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombreNegocio: form.nombreNegocio.trim(),
-          ...(form.slug.trim() ? { slug: form.slug.trim().toLowerCase() } : {}),
           nombreCompleto: form.nombreCompleto.trim(),
           username: form.username.trim(),
           password: form.password,
@@ -59,10 +57,6 @@ export default function RegistroNegocio() {
           <div className="field">
             <label>Nombre del negocio</label>
             <input className="input" value={form.nombreNegocio} onChange={set('nombreNegocio')} required maxLength={120} placeholder="Bar El Rincón" />
-          </div>
-          <div className="field">
-            <label>Identificador (slug, opcional)</label>
-            <input className="input" value={form.slug} onChange={set('slug')} placeholder="bar-el-rincon" />
           </div>
           <div className="field">
             <label>Tu nombre completo</label>
