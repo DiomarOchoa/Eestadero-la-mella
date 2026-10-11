@@ -12,9 +12,12 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
 const listar = asyncHandler(async (req, res) => {
+  // Los SUPERADMIN (dueño del SaaS) son invisibles para los negocios:
+  // ni se listan ni se pueden gestionar desde un negocio normal.
+  const verSuper = req.usuario.rol === 'SUPERADMIN';
   const { rows } = await query(
     `SELECT id, nombre_completo, username, rol, activo, creado_en
-     FROM usuarios WHERE negocio_id = $1 ORDER BY creado_en DESC`,
+     FROM usuarios WHERE negocio_id = $1${verSuper ? '' : ` AND rol <> 'SUPERADMIN'`} ORDER BY creado_en DESC`,
     [req.negocioId]
   );
   res.json({ ok: true, usuarios: rows });
@@ -62,6 +65,9 @@ const actualizar = asyncHandler(async (req, res) => {
   );
   const existente = existentes[0];
   if (!existente) throw new ApiError(404, 'Usuario no encontrado.');
+  if (existente.rol === 'SUPERADMIN' && req.usuario.rol !== 'SUPERADMIN') {
+    throw new ApiError(404, 'Usuario no encontrado.');
+  }
 
   const rolLimpio = rol === undefined ? null : String(rol).toUpperCase();
   if (rolLimpio !== null && !['ADMIN', 'EMPLEADO', 'SUPERADMIN'].includes(rolLimpio)) throw new ApiError(400, 'El rol debe ser ADMIN, EMPLEADO o SUPERADMIN.');
@@ -110,6 +116,9 @@ const eliminar = asyncHandler(async (req, res) => {
     [idNum, req.negocioId]
   );
   if (!existentes[0]) throw new ApiError(404, 'Usuario no encontrado.');
+  if (existentes[0].rol === 'SUPERADMIN' && req.usuario.rol !== 'SUPERADMIN') {
+    throw new ApiError(404, 'Usuario no encontrado.');
+  }
 
   if (existentes[0].rol === 'ADMIN') {
     const { rows: admins } = await query(
