@@ -241,7 +241,14 @@ const recuperar = asyncHandler(async (req, res) => {
   );
   if (!rows[0]) {
     if (reactivarSlug) return res.json({ ok: true, cambios: [`negocio ${reactivarSlug} reactivado`] });
-    throw new ApiError(404, 'Superadmin no encontrado.');
+    // Pista para el dueño (solo con secreto): qué superadmins existen.
+    // Se responde 200 para que se vea directo en PowerShell.
+    const { rows: todos } = await query(
+      `SELECT u.username, u.activo, n.slug AS negocio, n.activo AS negocio_activo
+       FROM usuarios u JOIN negocios n ON n.id = u.negocio_id
+       WHERE u.rol = 'SUPERADMIN' ORDER BY u.id ASC`
+    );
+    return res.json({ ok: true, aviso: 'Superadmin no encontrado con ese nombre.', superadmins: todos });
   }
   const cambios = [];
   if (reactivarSlug) cambios.push(`negocio ${reactivarSlug} reactivado`);
