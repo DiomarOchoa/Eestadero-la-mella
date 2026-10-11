@@ -51,6 +51,7 @@ export default function RegistroNegocio() {
   return (
     <div className="login-shell">
       <div className="login-card">
+        <div className="login-badge">✨ Nuevo</div>
         <div className="login-sign">Registra tu negocio</div>
         <div className="login-sub">Crea tu estadero y tu usuario admin en un paso</div>
         {error && <div className="form-error">{error}</div>}
@@ -79,7 +80,7 @@ export default function RegistroNegocio() {
             {cargando ? 'Creando...' : 'Crear negocio'}
           </button>
         </form>
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
+        <div className="login-foot">
           <Link to="/login">Ya tengo cuenta</Link>
         </div>
       </div>

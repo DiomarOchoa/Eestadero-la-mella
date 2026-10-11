@@ -61,6 +61,7 @@ export default function Login() {
   return (
     <div className="login-shell">
       <div className="login-card">
+        <div className="login-badge">🍺 Estadero</div>
         <div className="login-sign">{nombreMostrar}</div>
         <div className="login-sub">Acceso privado — solo personal autorizado</div>
 
@@ -116,7 +117,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
+        <div className="login-foot">
           <Link to="/registro">¿Nuevo negocio? Regístralo aquí</Link>
         </div>
       </div>
