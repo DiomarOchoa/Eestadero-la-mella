@@ -5,6 +5,9 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
+const PRESETS_ACENTO = ['#E3A23C', '#C1502E', '#5DA377', '#4F8FE8', '#9B6BE8', '#E86AA0'];
+const PRESETS_FONDO = ['#14201A', '#1A1A2E', '#241A12', '#0F2A33', '#2B1215', '#F3EEDF'];
+
 export default function Ajustes() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -143,16 +146,63 @@ export default function Ajustes() {
                 <input className="input" value={tema.nombre} onChange={(e) => setTema({ ...tema, nombre: e.target.value })} placeholder={negocio?.nombre || ''} maxLength={120} />
               </div>
               <div className="field">
-                <label>Logo (URL)</label>
-                <input className="input" value={tema.logoUrl} onChange={(e) => setTema({ ...tema, logoUrl: e.target.value })} placeholder="https://..." />
+                <label>Logo (opcional, enlace de imagen)</label>
+                <div className="flex items-center gap-2">
+                  <input className="input" value={tema.logoUrl} onChange={(e) => setTema({ ...tema, logoUrl: e.target.value })} placeholder="https://..." />
+                  {tema.logoUrl.trim() && (
+                    <img src={tema.logoUrl.trim()} alt="Vista previa del logo" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  )}
+                </div>
               </div>
               <div className="field">
-                <label>Color acento (HEX)</label>
-                <input className="input" value={tema.colorAcento} onChange={(e) => setTema({ ...tema, colorAcento: e.target.value })} placeholder="#E3A23C" />
+                <label>Color principal (botones y detalles)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(tema.colorAcento) ? tema.colorAcento : '#E3A23C'}
+                    onChange={(e) => setTema({ ...tema, colorAcento: e.target.value })}
+                    style={{ width: 46, height: 40, padding: 2, borderRadius: 10, cursor: 'pointer' }}
+                  />
+                  <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                    {PRESETS_ACENTO.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        title={c}
+                        onClick={() => setTema({ ...tema, colorAcento: c })}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
+                          border: tema.colorAcento.toLowerCase() === c.toLowerCase() ? '2px solid var(--color-text)' : '2px solid transparent',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="field">
-                <label>Color fondo (HEX)</label>
-                <input className="input" value={tema.colorFondo} onChange={(e) => setTema({ ...tema, colorFondo: e.target.value })} placeholder="#14201A" />
+                <label>Color de fondo</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(tema.colorFondo) ? tema.colorFondo : '#14201A'}
+                    onChange={(e) => setTema({ ...tema, colorFondo: e.target.value })}
+                    style={{ width: 46, height: 40, padding: 2, borderRadius: 10, cursor: 'pointer' }}
+                  />
+                  <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                    {PRESETS_FONDO.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        title={c}
+                        onClick={() => setTema({ ...tema, colorFondo: c })}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
+                          border: tema.colorFondo.toLowerCase() === c.toLowerCase() ? '2px solid var(--color-text)' : '2px solid transparent',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             <button className="btn btn-outline" type="submit" disabled={guardandoTema}>
