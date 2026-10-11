@@ -20,7 +20,7 @@ const PLANES = {
 
 /** GET /api/billing/planes (público) */
 const listarPlanes = asyncHandler(async (req, res) => {
-  res.json({ ok: true, planes: PLANES });
+  res.json({ ok: true, planes: PLANES, trialDias: Number(process.env.TRIAL_DIAS) || 14 });
 });
 
 function verificarSecreto(req) {
@@ -64,11 +64,38 @@ const webhook = asyncHandler(async (req, res) => {
   }
 
   const { rows } = await query(
-    `UPDATE negocios SET plan = $1::text, suscripcion_vence_en = COALESCE($2::date, suscripcion_vence_en)
+    `UPDATE negocios SET plan = $1::text,
+       suscripcion_vence_en = CASE WHEN $1 = 'GRATIS' THEN NULL ELSE COALESCE($2::date, suscripcion_vence_en) END
      WHERE slug = $3 RETURNING id, nombre, slug, plan, suscripcion_vence_en`,
     [plan, nuevoVencimiento, slug]
   );
   res.json({ ok: true, negocio: rows[0] });
 });
 
-module.exports = { listarPlanes, webhook };
+/**
+ * GET /api/billing/estado (autenticado)
+ * Estado de suscripción del negocio: plan, vencimiento, días restantes,
+ * si está en prueba y si está vencido. Lo usa la página /planes y el Dashboard.
+ */
+const estado = asyncHandler(async (req, res) => {
+  const { rows } = await query(
+    `SELECT plan, suscripcion_vence_en FROM negocios WHERE id = $1`,
+    [req.negocioId]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Negocio no encontrado.');
+  const { plan, suscripcion_vence_en } = rows[0];
+  let diasRestantes = null;
+  let vencido = false;
+  if (suscripcion_vence_en) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    diasRestantes = Math.ceil((new Date(suscripcion_vence_en) - hoy) / 86400000);
+    vencido = diasRestantes < 0;
+  }
+  res.json({
+    ok: true,
+    estado: { plan, venceEn: suscripcion_vence_en, diasRestantes, vencido, enPrueba: plan === 'PRO' && !vencido && diasRestantes !== null && diasRestantes <= (Number(process.env.TRIAL_DIAS) || 14) },
+  });
+});
+
+module.exports = { listarPlanes, webhook, estado };

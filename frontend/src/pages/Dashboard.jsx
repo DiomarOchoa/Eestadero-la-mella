@@ -11,14 +11,19 @@ const formatoCOP = new Intl.NumberFormat('es-CO', {
 
 export default function Dashboard() {
   const [resumen, setResumen] = useState(null);
+  const [suscripcion, setSuscripcion] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
   const cargar = async () => {
     setCargando(true);
     try {
-      const data = await api.get('/reportes/resumen');
+      const [data, billing] = await Promise.all([
+        api.get('/reportes/resumen'),
+        api.get('/billing/estado').catch(() => null),
+      ]);
       setResumen(data.resumen);
+      if (billing?.estado) setSuscripcion(billing.estado);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,6 +49,25 @@ export default function Dashboard() {
       </div>
 
       {error && <div className="form-error">{error}</div>}
+
+      {suscripcion && (suscripcion.enPrueba || (suscripcion.diasRestantes !== null && suscripcion.diasRestantes <= 3)) && !suscripcion.vencido && (
+        <div className="card mb-4 flex justify-between items-center gap-3">
+          <div>
+            <strong>
+              {suscripcion.enPrueba
+                ? `Prueba PRO: te quedan ${suscripcion.diasRestantes} día(s)`
+                : `Tu plan vence en ${suscripcion.diasRestantes} día(s)`}
+            </strong>
+            <div className="text-sm text-muted">Elige un plan para no interrumpir tus ventas.</div>
+          </div>
+          <Link to="/planes" className="btn btn-primary btn-sm">Ver planes</Link>
+        </div>
+      )}
+      {suscripcion?.vencido && (
+        <div className="form-error">
+          Tu suscripción venció. No puedes registrar ventas hasta renovar. <Link to="/planes">Ver planes</Link>
+        </div>
+      )}
 
       {cargando && !resumen ? (
         <div className="spinner" />

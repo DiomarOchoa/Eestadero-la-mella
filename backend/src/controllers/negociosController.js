@@ -73,13 +73,14 @@ const crear = asyncHandler(async (req, res) => {
 
     const slug = await resolverSlugDisponible(client, nombreNegocio, slugPropuesto);
 
-    // Plan GRATIS por defecto: sin vencimiento, límite de 20 productos
-    // (ver productosController.crear) — el gancho natural para el upsell.
+    // Prueba gratis: todo negocio nuevo entra en PRO por TRIAL_DIAS días.
+    // Al vencer, las escrituras se bloquean (402) hasta pagar o bajar a GRATIS.
+    const trialDias = Number(process.env.TRIAL_DIAS) || 14;
     const { rows: negocioRows } = await client.query(
-      `INSERT INTO negocios (nombre, slug, plan)
-       VALUES ($1, $2, 'GRATIS')
-       RETURNING id, nombre, slug, plan`,
-      [nombreNegocio, slug]
+      `INSERT INTO negocios (nombre, slug, plan, suscripcion_vence_en)
+       VALUES ($1, $2, 'PRO', CURRENT_DATE + ($3 || ' days')::INTERVAL)
+       RETURNING id, nombre, slug, plan, suscripcion_vence_en`,
+      [nombreNegocio, slug, trialDias]
     );
     const negocio = negocioRows[0];
 
@@ -115,7 +116,7 @@ const crear = asyncHandler(async (req, res) => {
         username: usuario.username,
         rol: usuario.rol,
       },
-      negocio: { id: negocio.id, nombre: negocio.nombre, slug: negocio.slug, plan: negocio.plan },
+      negocio: { id: negocio.id, nombre: negocio.nombre, slug: negocio.slug, plan: negocio.plan, venceEn: negocio.suscripcion_vence_en },
     });
   } catch (err) {
     await client.query('ROLLBACK');
