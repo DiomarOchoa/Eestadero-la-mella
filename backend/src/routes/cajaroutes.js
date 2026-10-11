@@ -6,7 +6,8 @@
 
 const { Router } = require('express');
 const { query, getClient } = require('../config/db');
-const { autenticar, autorizar } = require('../middleware/auth');
+const { autenticar, autorizar, requerirSuscripcionActiva } = require('../middleware/auth');
+const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
@@ -145,21 +146,25 @@ const cerrar = asyncHandler(async (req, res) => {
 });
 
 const historial = asyncHandler(async (req, res) => {
-  const { rows } = await query(
-    `SELECT ct.*, ua.nombre_completo AS abierta_por, uc.nombre_completo AS cerrada_por
+  const { page, limit, offset } = obtenerPaginacion(req.query, { porDefecto: 20, maximo: 100 });
+  const [{ rows }, { rows: conteo }] = await Promise.all([
+    query(
+      `SELECT ct.*, ua.nombre_completo AS abierta_por, uc.nombre_completo AS cerrada_por
      FROM caja_turnos ct
      JOIN usuarios ua ON ua.id = ct.usuario_apertura_id
      LEFT JOIN usuarios uc ON uc.id = ct.usuario_cierre_id
      WHERE ct.negocio_id = $1
-     ORDER BY ct.fecha_apertura DESC LIMIT 100`,
-    [req.negocioId]
-  );
-  res.json({ ok: true, historial: rows });
+     ORDER BY ct.fecha_apertura DESC LIMIT $2 OFFSET $3`,
+      [req.negocioId, limit, offset]
+    ),
+    query('SELECT COUNT(*)::int AS total FROM caja_turnos WHERE negocio_id = $1', [req.negocioId]),
+  ]);
+  res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'historial' }));
 });
 
 router.get('/actual', actual);
-router.post('/abrir', autorizar('ADMIN'), abrir);
-router.post('/:id/cerrar', autorizar('ADMIN'), cerrar);
+router.post('/abrir', autorizar('ADMIN'), requerirSuscripcionActiva, abrir);
+router.post('/:id/cerrar', autorizar('ADMIN'), requerirSuscripcionActiva, cerrar);
 router.get('/historial', autorizar('ADMIN'), historial);
 
 module.exports = router;

@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const errorHandler = require('./middleware/errorHandler');
+const { limiteAuth, limiteGeneral } = require('./middleware/rateLimit');
 const authRoutes = require('./routes/authRoutes');
 const negociosRoutes = require('./routes/negociosRoutes');
 const usuariosRoutes = require('./routes/usuariosRoutes');
@@ -12,6 +13,9 @@ const cuentasRoutes = require('./routes/cuentasRoutes');
 const reportesRoutes = require('./routes/reportesRoutes');
 
 const app = express();
+
+// Necesario en Render/Vercel para que req.ip sea la real tras el proxy.
+app.set('trust proxy', 1);
 
 const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
@@ -45,14 +49,14 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'Estadero La Mella API', hora: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/negocios', negociosRoutes);
-app.use('/api/usuarios', usuariosRoutes);
-app.use('/api/productos', productosRoutes);
-app.use('/api/clientes', clientesRoutes);
-app.use('/api/cuentas', cuentasRoutes);
-app.use('/api/reportes', reportesRoutes);
-app.use('/api/caja', cajaRoutes);
+app.use('/api/auth', limiteAuth, authRoutes);
+app.use('/api/negocios', limiteAuth, negociosRoutes);
+app.use('/api/usuarios', limiteGeneral, usuariosRoutes);
+app.use('/api/productos', limiteGeneral, productosRoutes);
+app.use('/api/clientes', limiteGeneral, clientesRoutes);
+app.use('/api/cuentas', limiteGeneral, cuentasRoutes);
+app.use('/api/reportes', limiteGeneral, reportesRoutes);
+app.use('/api/caja', limiteGeneral, cajaRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, mensaje: 'Ruta no encontrada.' });

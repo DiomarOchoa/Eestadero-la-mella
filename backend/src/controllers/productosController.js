@@ -10,12 +10,14 @@
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
 
 const TIPOS_VALIDOS = ['CERVEZA', 'BEBIDA', 'SNACK'];
 
-/** GET /api/productos?tipo=&activo=&q= */
+/** GET /api/productos?tipo=&activo=&q=&page=&limit= */
 const listar = asyncHandler(async (req, res) => {
   const { tipo, activo, q } = req.query;
+  const { page, limit, offset } = obtenerPaginacion(req.query);
 
   // $1 reservado para el negocio: el filtro nunca es opcional.
   const params = [req.negocioId];
@@ -47,11 +49,16 @@ const listar = asyncHandler(async (req, res) => {
     `SELECT id, nombre, tipo, precio, stock, stock_minimo, activo, creado_en
      FROM productos
      WHERE ${condiciones.join(' AND ')}
-     ORDER BY tipo, nombre`,
+     ORDER BY tipo, nombre
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  const { rows: conteo } = await query(
+    `SELECT COUNT(*)::int AS total FROM productos WHERE ${condiciones.join(' AND ')}`,
     params
   );
 
-  res.json({ ok: true, productos: rows });
+  res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'productos' }));
 });
 
 /** POST /api/productos */

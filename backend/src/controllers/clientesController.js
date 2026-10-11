@@ -4,25 +4,30 @@
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
 
 /** GET /api/clientes?q= - listar/buscar clientes (usado en autocompletado) */
 const listar = asyncHandler(async (req, res) => {
   const { q } = req.query;
+  const { page, limit, offset } = obtenerPaginacion(req.query, { porDefecto: 20, maximo: 100 });
   if (q) {
     const { rows } = await query(
       `SELECT id, referencia, notas, creado_en FROM clientes
        WHERE negocio_id = $1 AND LOWER(referencia) LIKE $2
-       ORDER BY creado_en DESC LIMIT 10`,
-      [req.negocioId, `%${q.toLowerCase()}%`]
+       ORDER BY creado_en DESC LIMIT $3 OFFSET $4`,
+      [req.negocioId, `%${q.toLowerCase()}%`, limit, offset]
     );
-    return res.json({ ok: true, clientes: rows });
+    return res.json(respuestaPaginada({ page, limit, total: rows.length, datos: rows, clave: 'clientes' }));
   }
-  const { rows } = await query(
-    `SELECT id, referencia, notas, creado_en FROM clientes
-     WHERE negocio_id = $1 ORDER BY creado_en DESC LIMIT 100`,
-    [req.negocioId]
-  );
-  res.json({ ok: true, clientes: rows });
+  const [{ rows }, { rows: conteo }] = await Promise.all([
+    query(
+      `SELECT id, referencia, notas, creado_en FROM clientes
+     WHERE negocio_id = $1 ORDER BY creado_en DESC LIMIT $2 OFFSET $3`,
+      [req.negocioId, limit, offset]
+    ),
+    query('SELECT COUNT(*)::int AS total FROM clientes WHERE negocio_id = $1', [req.negocioId]),
+  ]);
+  res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'clientes' }));
 });
 
 /** POST /api/clientes - crear referencia de cliente nueva */

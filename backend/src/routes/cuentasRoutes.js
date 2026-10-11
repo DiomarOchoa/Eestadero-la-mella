@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { autenticar } = require('../middleware/auth');
+const { autenticar, requerirSuscripcionActiva } = require('../middleware/auth');
 const {
   listar,
   obtener,
@@ -18,12 +18,12 @@ router.use(autenticar);
 
 router.get('/', listar);
 router.get('/:id', obtener);
-router.post('/', abrir);
-router.patch('/:id', actualizar);
-router.post('/:id/productos', agregarProducto);
-router.patch('/:id/productos/:itemId', actualizarCantidad);
-router.delete('/:id/productos/:itemId', eliminarProducto);
-router.post('/:id/cerrar', cerrar);
-router.post('/:id/cancelar', cancelar);
+router.post('/', requerirSuscripcionActiva, abrir);
+router.patch('/:id', requerirSuscripcionActiva, actualizar);
+router.post('/:id/productos', requerirSuscripcionActiva, agregarProducto);
+router.patch('/:id/productos/:itemId', requerirSuscripcionActiva, actualizarCantidad);
+router.delete('/:id/productos/:itemId', requerirSuscripcionActiva, eliminarProducto);
+router.post('/:id/cerrar', requerirSuscripcionActiva, cerrar);
+router.post('/:id/cancelar', requerirSuscripcionActiva, cancelar);
 
 module.exports = router;

@@ -15,13 +15,16 @@
 const { query, getClient } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
 
 const listar = asyncHandler(async (req, res) => {
   const estado = (req.query.estado || 'ABIERTA').toUpperCase();
   if (!['ABIERTA', 'CERRADA', 'CANCELADA'].includes(estado)) throw new ApiError(400, 'Estado de cuenta inválido.');
+  const { page, limit, offset } = obtenerPaginacion(req.query, { porDefecto: 20, maximo: 100 });
 
-  const { rows } = await query(
-    `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
+  const [{ rows }, { rows: conteo }] = await Promise.all([
+    query(
+      `SELECT c.id, c.estado, c.total, c.fecha_apertura, c.fecha_cierre,
             c.metodo_pago, c.para_llevar,
             cl.id AS cliente_id, cl.referencia AS cliente_referencia,
             u.nombre_completo AS abierta_por
@@ -29,10 +32,16 @@ const listar = asyncHandler(async (req, res) => {
      JOIN clientes cl ON cl.id = c.cliente_id
      JOIN usuarios u ON u.id = c.usuario_apertura_id
      WHERE c.negocio_id = $1 AND c.estado = $2::estado_cuenta
-     ORDER BY c.fecha_apertura ASC`,
-    [req.negocioId, estado]
-  );
-  res.json({ ok: true, cuentas: rows });
+     ORDER BY c.fecha_apertura ASC
+     LIMIT $3 OFFSET $4`,
+      [req.negocioId, estado, limit, offset]
+    ),
+    query(
+      `SELECT COUNT(*)::int AS total FROM cuentas WHERE negocio_id = $1 AND estado = $2::estado_cuenta`,
+      [req.negocioId, estado]
+    ),
+  ]);
+  res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'cuentas' }));
 });
 
 const obtener = asyncHandler(async (req, res) => {

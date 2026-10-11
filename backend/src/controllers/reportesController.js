@@ -5,6 +5,7 @@
 const { query } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
 
 const obtenerDias = (valor) => {
   const dias = Number(valor);
@@ -86,8 +87,10 @@ const resumen = asyncHandler(async (req, res) => {
 
 const cuentasDetalle = asyncHandler(async (req, res) => {
   const dias = obtenerDias(req.query.dias || 30);
-  const { rows } = await query(
-    `SELECT c.id,
+  const { page, limit, offset } = obtenerPaginacion(req.query, { porDefecto: 50, maximo: 200 });
+  const [{ rows }, { rows: conteo }] = await Promise.all([
+    query(
+      `SELECT c.id,
             cl.referencia AS cliente,
             c.total,
             c.metodo_pago,
@@ -117,10 +120,18 @@ const cuentasDetalle = asyncHandler(async (req, res) => {
      WHERE c.negocio_id = $1
        AND c.estado = 'CERRADA'
        AND c.fecha_cierre >= NOW() - ($2 || ' days')::INTERVAL
-     ORDER BY c.fecha_cierre DESC`,
-    [req.negocioId, dias]
-  );
-  res.json({ ok: true, cuentasDetalle: rows });
+     ORDER BY c.fecha_cierre DESC
+     LIMIT $3 OFFSET $4`,
+      [req.negocioId, dias, limit, offset]
+    ),
+    query(
+      `SELECT COUNT(*)::int AS total FROM cuentas c
+       WHERE c.negocio_id = $1 AND c.estado = 'CERRADA'
+         AND c.fecha_cierre >= NOW() - ($2 || ' days')::INTERVAL`,
+      [req.negocioId, dias]
+    ),
+  ]);
+  res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'cuentasDetalle' }));
 });
 
 const cierreCaja = asyncHandler(async (req, res) => {

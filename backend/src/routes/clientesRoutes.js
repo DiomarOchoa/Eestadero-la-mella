@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { autenticar } = require('../middleware/auth');
+const { autenticar, requerirSuscripcionActiva } = require('../middleware/auth');
 const { listar, crear } = require('../controllers/clientesController');
 
 const router = Router();
@@ -7,6 +7,6 @@ const router = Router();
 router.use(autenticar);
 
 router.get('/', listar);
-router.post('/', crear);
+router.post('/', requerirSuscripcionActiva, crear);
 
 module.exports = router;
