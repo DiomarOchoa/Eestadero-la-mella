@@ -20,7 +20,7 @@
 
 .btn-primary {
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
-  color: #1A1300;
+  color: #FFFFFF;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1px); }

@@ -51,7 +51,7 @@
     height: 56px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
-    color: #1A1300;
+    color: #FFFFFF;
     box-shadow: 0 8px 24px color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
 }

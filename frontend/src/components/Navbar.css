@@ -72,7 +72,7 @@
 .navbar-links a svg { flex-shrink: 0; opacity: 0.85; }
 .navbar-links a:hover { color: var(--color-text); background: var(--color-surface-raised); }
 .navbar-links a.active {
-  color: #1A1300;
+  color: #FFFFFF;
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
 }
 

@@ -5,28 +5,29 @@
   No es el look "SaaS genérico": buscamos que se sienta como un negocio real, nocturno y cálido.
 */
 :root {
-  /* Paleta */
-  --color-bg: #14201A;           /* verde botella casi negro — fondo principal */
-  --color-bg-alt: #182619;       /* variación sutil para franjas/secciones */
-  --color-surface: #1E2E22;      /* tarjetas y paneles */
-  --color-surface-raised: #26392C; /* elementos elevados (modales, inputs activos) */
-  --color-border: #35492F;       /* bordes sutiles sobre superficies oscuras */
+  /* Paleta "noche eléctrica": navy profundo + azul eléctrico + cian + verde.
+     Inspiración fintech moderna sobre la base nocturna del estadero. */
+  --color-bg: #060D1F;           /* navy casi negro — fondo principal */
+  --color-bg-alt: #0A1430;       /* variación sutil para franjas/secciones */
+  --color-surface: #0D1830;      /* tarjetas y paneles */
+  --color-surface-raised: #14224A; /* elementos elevados (modales, inputs activos) */
+  --color-border: #1E2F5A;       /* bordes sutiles sobre superficies oscuras */
 
-  --color-accent: #E3A23C;       /* ámbar neón — acción principal, signage */
-  --color-accent-strong: #F0B85B;
-  --color-brick: #C1502E;        /* terracota/ladrillo — alertas, cerrar cuenta */
-  --color-brick-strong: #D66240;
+  --color-accent: #2F7CF6;       /* azul eléctrico — acción principal */
+  --color-accent-strong: #38E1FF; /* cian neón — resaltados */
+  --color-brick: #F6465D;        /* rojo rosado — alertas, cerrar cuenta */
+  --color-brick-strong: #FF6B81;
 
-  --color-text: #F3EEDF;         /* crema cálido — texto principal sobre fondo oscuro */
-  --color-text-muted: #9FB09A;   /* verde grisáceo — texto secundario */
-  --color-text-dim: #6E8069;
+  --color-text: #F2F6FF;         /* blanco azulado — texto principal */
+  --color-text-muted: #8EA0C2;   /* azul grisáceo — texto secundario */
+  --color-text-dim: #5B6B8C;
 
-  --color-success: #5DA377;
-  --color-success-bg: rgba(93, 163, 119, 0.14);
-  --color-danger: #D66240;
-  --color-danger-bg: rgba(214, 98, 64, 0.14);
-  --color-warning: #E3A23C;
-  --color-warning-bg: rgba(227, 162, 60, 0.14);
+  --color-success: #22C55E;
+  --color-success-bg: rgba(34, 197, 94, 0.14);
+  --color-danger: #F6465D;
+  --color-danger-bg: rgba(246, 70, 93, 0.14);
+  --color-warning: #F5A623;
+  --color-warning-bg: rgba(245, 166, 35, 0.14);
 
   /* Tipografía */
   --font-display: 'Anton', 'Arial Narrow', sans-serif;
@@ -65,28 +66,28 @@
   fachada iluminada en vez de neón de noche. Se activa con [data-theme="light"] en <html>.
 */
 [data-theme='light'] {
-  --color-bg: #F3EEDF;              /* crema cálido — antes era el color de texto */
-  --color-bg-alt: #ECE4CE;
+  --color-bg: #F2F6FF;              /* blanco azulado */
+  --color-bg-alt: #E6EDFB;
   --color-surface: #FFFFFF;
-  --color-surface-raised: #FBF6E9;
-  --color-border: #DDD2B0;
+  --color-surface-raised: #F4F8FF;
+  --color-border: #CBD8F2;
 
-  --color-accent: #B97A1E;          /* ámbar más terroso, con contraste sobre claro */
-  --color-accent-strong: #9C6415;
-  --color-brick: #B4491F;
-  --color-brick-strong: #973B18;
+  --color-accent: #1D6FF2;          /* azul eléctrico en claro */
+  --color-accent-strong: #0EA5C9;
+  --color-brick: #D92D4E;
+  --color-brick-strong: #B4233F;
 
-  --color-text: #1E2E22;            /* verde botella oscuro — antes era el fondo */
-  --color-text-muted: #55624E;
-  --color-text-dim: #8A9280;
+  --color-text: #0A1430;            /* navy — antes era el fondo */
+  --color-text-muted: #4C5F86;
+  --color-text-dim: #8EA0C2;
 
-  --color-success: #2F7A50;
-  --color-success-bg: rgba(47, 122, 80, 0.10);
-  --color-danger: #B4491F;
-  --color-danger-bg: rgba(180, 73, 31, 0.10);
-  --color-warning: #B97A1E;
-  --color-warning-bg: rgba(185, 122, 30, 0.10);
+  --color-success: #15803D;
+  --color-success-bg: rgba(21, 128, 61, 0.10);
+  --color-danger: #D92D4E;
+  --color-danger-bg: rgba(217, 45, 78, 0.10);
+  --color-warning: #B45309;
+  --color-warning-bg: rgba(180, 83, 9, 0.10);
 
-  --shadow-card: 0 8px 24px rgba(30, 46, 34, 0.10);
-  --shadow-pop: 0 12px 32px rgba(30, 46, 34, 0.16);
+  --shadow-card: 0 8px 24px rgba(10, 20, 48, 0.10);
+  --shadow-pop: 0 12px 32px rgba(10, 20, 48, 0.16);
 }
