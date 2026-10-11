@@ -26,6 +26,9 @@ const listarNegocios = asyncHandler(async (req, res) => {
     conds.push(`n.activo = $${params.length}`);
   }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  // El negocio semilla del dueño ('lamella') no es un cliente: se gestiona
+  // desde las páginas normales, no desde el panel SaaS.
+  const whereSinSemilla = where ? `${where} AND n.slug <> 'lamella'` : `WHERE n.slug <> 'lamella'`;
 
   const [{ rows }, { rows: conteo }] = await Promise.all([
     query(
@@ -36,12 +39,12 @@ const listarNegocios = asyncHandler(async (req, res) => {
               (SELECT COALESCE(SUM(c.total),0) FROM cuentas c WHERE c.negocio_id = n.id AND c.estado = 'CERRADA'
                 AND (c.fecha_cierre AT TIME ZONE 'America/Bogota')::date = (NOW() AT TIME ZONE 'America/Bogota')::date) AS vendido_hoy
        FROM negocios n
-       ${where}
+       ${whereSinSemilla}
        ORDER BY n.creado_en DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset]
     ),
-    query(`SELECT COUNT(*)::int AS total FROM negocios n ${where}`, params),
+    query(`SELECT COUNT(*)::int AS total FROM negocios n ${whereSinSemilla}`, params),
   ]);
   res.json(respuestaPaginada({ page, limit, total: conteo[0].total, datos: rows, clave: 'negocios' }));
 });
@@ -58,6 +61,13 @@ const actualizarNegocio = asyncHandler(async (req, res) => {
   if (activo !== undefined && typeof activo !== 'boolean') throw new ApiError(400, 'activo debe ser verdadero o falso.');
   if (suscripcion_vence_en !== undefined && suscripcion_vence_en !== null && !/^\d{4}-\d{2}-\d{2}$/.test(suscripcion_vence_en)) {
     throw new ApiError(400, 'suscripcion_vence_en debe ser YYYY-MM-DD o null.');
+  }
+
+  // El negocio semilla del dueño no se suspende ni se edita su plan desde aquí.
+  const { rows: semilla } = await query('SELECT slug FROM negocios WHERE id = $1', [id]);
+  if (!semilla[0]) throw new ApiError(404, 'Negocio no encontrado.');
+  if (semilla[0].slug === 'lamella' && (activo === false || plan !== undefined)) {
+    throw new ApiError(400, 'Tu propio negocio no se suspende ni cambia de plan desde este panel.');
   }
 
   const { rows } = await query(
@@ -148,6 +158,9 @@ const eliminarNegocio = asyncHandler(async (req, res) => {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT id, nombre, slug FROM negocios WHERE id = $1', [id]);
     if (!rows[0]) throw new ApiError(404, 'Negocio no encontrado.');
+    if (rows[0].slug === 'lamella') {
+      throw new ApiError(400, 'Tu propio negocio no se puede eliminar desde este panel.');
+    }
     if (confirmacion !== rows[0].slug.toLowerCase()) {
       throw new ApiError(400, `Para eliminar escribe el slug del negocio ("${rows[0].slug}") en confirmacion.`);
     }
