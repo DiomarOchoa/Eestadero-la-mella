@@ -39,6 +39,27 @@ export default function AdminNegocios() {
     }
   };
 
+  const eliminar = async (n) => {
+    const texto = prompt(`Vas a ELIMINAR "${n.nombre}" y TODOS sus datos. Para confirmar escribe su slug: ${n.slug}`, '');
+    if (texto === null) return;
+    try {
+      await api.delete(`/admin/negocios/${n.id}`, { confirmacion: texto });
+      await cargar();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+    setGuardando(id);
+    try {
+      await api.patch(`/admin/negocios/${id}`, cambios);
+      await cargar();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -107,21 +128,31 @@ export default function AdminNegocios() {
                 />
               </td>
               <td>
-                <button
-                  className="btn btn-sm"
-                  disabled={guardando === n.id}
-                  onClick={() => {
-                    const dias = prompt('Extender suscripción ¿cuántos días? (ej: 30)', '30');
-                    if (!dias) return;
-                    // El webhook hace el cálculo; aquí usamos PATCH directo con fecha
-                    const base = n.suscripcion_vence_en ? new Date(n.suscripcion_vence_en) : new Date();
-                    const d = Number.isNaN(base.getTime()) ? new Date() : base;
-                    d.setDate(d.getDate() + Number(dias));
-                    actualizar(n.id, { suscripcion_vence_en: d.toISOString().slice(0, 10) });
-                  }}
-                >
-                  +días
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="btn btn-sm"
+                    disabled={guardando === n.id}
+                    onClick={() => {
+                      const dias = prompt('Extender suscripción ¿cuántos días? (ej: 30)', '30');
+                      if (!dias) return;
+                      // El webhook hace el cálculo; aquí usamos PATCH directo con fecha
+                      const base = n.suscripcion_vence_en ? new Date(n.suscripcion_vence_en) : new Date();
+                      const d = Number.isNaN(base.getTime()) ? new Date() : base;
+                      d.setDate(d.getDate() + Number(dias));
+                      actualizar(n.id, { suscripcion_vence_en: d.toISOString().slice(0, 10) });
+                    }}
+                  >
+                    +días
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    disabled={guardando === n.id}
+                    onClick={() => eliminar(n)}
+                    title="Eliminar negocio y todos sus datos"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

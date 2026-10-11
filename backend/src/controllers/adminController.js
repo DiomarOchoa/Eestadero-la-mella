@@ -132,4 +132,40 @@ const bootstrap = asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, usuario: rows[0] });
 });
 
-module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap };
+/**
+ * DELETE /api/admin/negocios/:id (solo superadmin)
+ * Elimina el negocio y TODOS sus datos (cuentas, caja, clientes, productos, usuarios).
+ * Pide confirmación { confirmacion: slug } para evitar borrados accidentales.
+ */
+const eliminarNegocio = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'ID de negocio inválido.');
+  const confirmacion = String(req.body?.confirmacion || '').trim().toLowerCase();
+
+  const { getClient } = require('../config/db');
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id, nombre, slug FROM negocios WHERE id = $1', [id]);
+    if (!rows[0]) throw new ApiError(404, 'Negocio no encontrado.');
+    if (confirmacion !== rows[0].slug.toLowerCase()) {
+      throw new ApiError(400, `Para eliminar escribe el slug del negocio ("${rows[0].slug}") en confirmacion.`);
+    }
+    // Orden hijos → padres (detalle_cuenta cae por CASCADE desde cuentas).
+    await client.query('DELETE FROM cuentas WHERE negocio_id = $1', [id]);
+    await client.query('DELETE FROM caja_turnos WHERE negocio_id = $1', [id]);
+    await client.query('DELETE FROM clientes WHERE negocio_id = $1', [id]);
+    await client.query('DELETE FROM productos WHERE negocio_id = $1', [id]);
+    await client.query('DELETE FROM usuarios WHERE negocio_id = $1', [id]);
+    await client.query('DELETE FROM negocios WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    res.json({ ok: true, mensaje: `Negocio "${rows[0].nombre}" y todos sus datos eliminados.` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap, eliminarNegocio };
