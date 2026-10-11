@@ -3,6 +3,7 @@
 // y está protegido por soloSuperAdmin en las rutas.
 
 const { query } = require('../config/db');
+const bcrypt = require('bcryptjs');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
@@ -94,4 +95,41 @@ const resumenGlobal = asyncHandler(async (req, res) => {
   res.json({ ok: true, resumen: { negocios: neg[0], usuariosActivos: usr[0].total, vendidoHoy: ven[0].hoy } });
 });
 
-module.exports = { listarNegocios, actualizarNegocio, resumenGlobal };
+/**
+ * POST /api/admin/bootstrap (público, un solo uso)
+ * Crea el PRIMER superadmin sin necesitar Shell (planes free de Render no tienen Shell).
+ * Body: { setupSecret, username, password, nombreCompleto? }
+ * - setupSecret debe igualar ADMIN_SETUP_SECRET del servidor.
+ * - Falla si ya existe algún SUPERADMIN (solo el primero).
+ * Tras usarlo, BORRA ADMIN_SETUP_SECRET de Render y redeploya.
+ */
+const bootstrap = asyncHandler(async (req, res) => {
+  const esperado = process.env.ADMIN_SETUP_SECRET || '';
+  if (!esperado) throw new ApiError(500, 'Bootstrap no configurado (ADMIN_SETUP_SECRET).');
+  if (String(req.body.setupSecret || '') !== esperado) {
+    throw new ApiError(401, 'Secreto de instalación inválido.');
+  }
+  const username = String(req.body.username || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const nombreCompleto = String(req.body.nombreCompleto || 'Super Admin').trim();
+  if (!username || username.length < 3 || username.length > 50) {
+    throw new ApiError(400, 'username de 3 a 50 caracteres.');
+  }
+  if (!password || password.length < 8) {
+    throw new ApiError(400, 'password de al menos 8 caracteres.');
+  }
+  const { rows: existentes } = await query(`SELECT 1 FROM usuarios WHERE rol = 'SUPERADMIN' LIMIT 1`);
+  if (existentes[0]) throw new ApiError(409, 'Ya existe un superadmin. Usa el panel /admin/negocios.');
+  const { rows: neg } = await query(`SELECT id FROM negocios WHERE slug = 'lamella' LIMIT 1`);
+  if (!neg[0]) throw new ApiError(500, "No existe el negocio 'lamella'.");
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await query(
+    `INSERT INTO usuarios (negocio_id, nombre_completo, username, password_hash, rol, activo)
+     VALUES ($1, $2, $3, $4, 'SUPERADMIN', TRUE)
+     RETURNING id, username, rol`,
+    [neg[0].id, nombreCompleto, username, hash]
+  );
+  res.status(201).json({ ok: true, usuario: rows[0] });
+});
+
+module.exports = { listarNegocios, actualizarNegocio, resumenGlobal, bootstrap };
