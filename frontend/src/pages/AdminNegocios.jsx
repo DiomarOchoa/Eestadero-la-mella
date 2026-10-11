@@ -100,6 +100,7 @@ export default function AdminNegocios() {
         <button className="btn" onClick={cargar}>Buscar</button>
       </div>
       {error && <div className="form-error">{error}</div>}
+      <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
@@ -179,6 +180,7 @@ export default function AdminNegocios() {
                     ) : (usuariosPorNegocio[n.id] || []).length === 0 ? (
                       <span className="text-muted text-sm">Sin usuarios.</span>
                     ) : (
+                      <div className="table-wrap">
                       <table className="table">
                         <thead>
                           <tr>
@@ -199,6 +201,7 @@ export default function AdminNegocios() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -207,6 +210,7 @@ export default function AdminNegocios() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
