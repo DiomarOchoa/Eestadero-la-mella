@@ -80,12 +80,32 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (username, password, negocioSlug) => {
-    const slug = String(negocioSlug || slugInicialNegocio() || '').trim().toLowerCase();
-    const data = await api.post('/auth/login', {
-      username,
-      password,
-      ...(slug ? { negocio: slug } : {}),
-    });
+    // Solo se usa el slug explícito del campo negocio. Nada de fallback a
+    // localStorage: un slug obsoleto guardado causaba "Ese negocio no existe."
+    const slug = String(negocioSlug || '').trim().toLowerCase();
+    if (!slug) {
+      try {
+        localStorage.removeItem(NEGOCIO_KEY);
+      } catch {}
+    }
+    let data;
+    try {
+      data = await api.post('/auth/login', {
+        username,
+        password,
+        ...(slug ? { negocio: slug } : {}),
+      });
+    } catch (e) {
+      // Si el header llevaba un slug viejo y el body iba limpio, reintentar limpio una vez.
+      if (!slug && /negocio no existe/i.test(e?.message || '')) {
+        try {
+          localStorage.removeItem(NEGOCIO_KEY);
+        } catch {}
+        data = await api.post('/auth/login', { username, password });
+      } else {
+        throw e;
+      }
+    }
     localStorage.setItem(TOKEN_KEY, data.token);
     if (data.negocio?.slug) localStorage.setItem(NEGOCIO_KEY, data.negocio.slug);
     setUsuario(data.usuario);
