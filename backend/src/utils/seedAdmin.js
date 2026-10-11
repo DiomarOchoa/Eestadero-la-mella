@@ -2,7 +2,7 @@
  * Script utilitario: crea (o actualiza la contraseña de) el usuario admin
  * inicial usando un hash bcrypt generado en tiempo de ejecución.
  *
- * Versión multi-tenant: el admin queda en el negocio 'lamella' y el
+ * Versión multi-tenant: El admin queda en el negocio semilla y el
  * username es único global (ver negociosController/usuariosController).
  *
  * Uso:
@@ -12,6 +12,7 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
+const { SLUG_SEMILLA } = require('./negocioSemilla');
 
 async function run() {
   const username = String(process.argv[2] || 'admin').trim().toLowerCase();
@@ -23,9 +24,9 @@ async function run() {
     process.exit(1);
   }
 
-  const { rows: neg } = await pool.query(`SELECT id FROM negocios WHERE slug = 'lamella' LIMIT 1`);
+  const { rows: neg } = await pool.query('SELECT id FROM negocios WHERE slug = $1 LIMIT 1', [SLUG_SEMILLA]);
   if (!neg[0]) {
-    console.error("No existe el negocio 'lamella'. Levanta el servidor una vez para crearlo.");
+    console.error(`No existe el negocio semilla ('${SLUG_SEMILLA}'). Levanta el servidor una vez para crearlo.`);
     process.exit(1);
   }
 

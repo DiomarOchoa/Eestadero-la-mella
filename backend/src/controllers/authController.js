@@ -3,7 +3,7 @@
 //
 // Cambio clave: ahora "admin" existe en cada negocio, así que el login debe
 // saber A QUÉ NEGOCIO pertenece quien está entrando. Se resuelve, en orden:
-//   1. subdominio            lamella.tuapp.com  -> slug "lamella"
+//   1. subdominio            tunegocio.tuapp.com  -> slug "tunegocio"
 //   2. header  X-Negocio-Slug (útil para la app móvil / PWA)
 //   3. campo   negocio       en el body del login
 //   4. si solo existe UN negocio en la base, se usa ese (modo local / legacy)

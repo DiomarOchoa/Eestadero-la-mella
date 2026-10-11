@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { obtenerPaginacion, respuestaPaginada } = require('../utils/paginacion');
+const { SLUG_SEMILLA } = require('../utils/negocioSemilla');
 
 const PLANES_VALIDOS = ['GRATIS', 'BASICO', 'PRO'];
 
@@ -26,9 +27,11 @@ const listarNegocios = asyncHandler(async (req, res) => {
     conds.push(`n.activo = $${params.length}`);
   }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-  // El negocio semilla del dueño ('lamella') no es un cliente: se gestiona
+  // El negocio semilla del dueño no es un cliente: se gestiona
   // desde las páginas normales, no desde el panel SaaS.
-  const whereSinSemilla = where ? `${where} AND n.slug <> 'lamella'` : `WHERE n.slug <> 'lamella'`;
+  params.push(SLUG_SEMILLA);
+  const sinSemilla = `n.slug <> $${params.length}`;
+  const whereSinSemilla = where ? `${where} AND ${sinSemilla}` : `WHERE ${sinSemilla}`;
 
   const [{ rows }, { rows: conteo }] = await Promise.all([
     query(
@@ -66,7 +69,7 @@ const actualizarNegocio = asyncHandler(async (req, res) => {
   // El negocio semilla del dueño no se suspende ni se edita su plan desde aquí.
   const { rows: semilla } = await query('SELECT slug FROM negocios WHERE id = $1', [id]);
   if (!semilla[0]) throw new ApiError(404, 'Negocio no encontrado.');
-  if (semilla[0].slug === 'lamella' && (activo === false || plan !== undefined)) {
+  if (semilla[0].slug === SLUG_SEMILLA && (activo === false || plan !== undefined)) {
     throw new ApiError(400, 'Tu propio negocio no se suspende ni cambia de plan desde este panel.');
   }
 
@@ -130,8 +133,8 @@ const bootstrap = asyncHandler(async (req, res) => {
   }
   const { rows: existentes } = await query(`SELECT 1 FROM usuarios WHERE rol = 'SUPERADMIN' LIMIT 1`);
   if (existentes[0]) throw new ApiError(409, 'Ya existe un superadmin. Usa el panel /admin/negocios.');
-  const { rows: neg } = await query(`SELECT id FROM negocios WHERE slug = 'lamella' LIMIT 1`);
-  if (!neg[0]) throw new ApiError(500, "No existe el negocio 'lamella'.");
+  const { rows: neg } = await query('SELECT id FROM negocios WHERE slug = $1 LIMIT 1', [SLUG_SEMILLA]);
+  if (!neg[0]) throw new ApiError(500, `No existe el negocio semilla ('${SLUG_SEMILLA}').`);
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await query(
     `INSERT INTO usuarios (negocio_id, nombre_completo, username, password_hash, rol, activo)
@@ -158,7 +161,7 @@ const eliminarNegocio = asyncHandler(async (req, res) => {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT id, nombre, slug FROM negocios WHERE id = $1', [id]);
     if (!rows[0]) throw new ApiError(404, 'Negocio no encontrado.');
-    if (rows[0].slug === 'lamella') {
+    if (rows[0].slug === SLUG_SEMILLA) {
       throw new ApiError(400, 'Tu propio negocio no se puede eliminar desde este panel.');
     }
     if (confirmacion !== rows[0].slug.toLowerCase()) {

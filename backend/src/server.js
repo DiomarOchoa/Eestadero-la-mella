@@ -184,12 +184,21 @@ COMMIT;
  * es NOT NULL pero nunca se crea ni se llena.
  */
 async function prepararMultiTenant() {
+  const { SLUG_SEMILLA, SLUG_ANTERIOR } = require('./utils/negocioSemilla');
   // Negocio semilla: todo lo que exista sin negocio_id quedará aquí.
-  await query(`
-    INSERT INTO negocios (nombre, slug, plan)
-    VALUES ('Estadero La Mella', 'lamella', 'PRO')
-    ON CONFLICT (slug) DO NOTHING
-  `);
+  // Renombre del slug anterior al nuevo (una sola vez, sin choques),
+  // y luego garantía de que la semilla existe.
+  const { rows: existeNuevo } = await query('SELECT 1 FROM negocios WHERE slug = $1', [SLUG_SEMILLA]);
+  if (!existeNuevo[0]) {
+    const { rowCount } = await query('UPDATE negocios SET slug = $1 WHERE slug = $2', [SLUG_SEMILLA, SLUG_ANTERIOR]);
+    if (rowCount > 0) console.log(`✅ Negocio semilla renombrado a '${SLUG_SEMILLA}'.`);
+  }
+  await query(
+    `INSERT INTO negocios (nombre, slug, plan)
+     VALUES ('Estadero La Mella', $1, 'PRO')
+     ON CONFLICT (slug) DO NOTHING`,
+    [SLUG_SEMILLA]
+  );
 
   await query(`ALTER TABLE usuarios     ADD COLUMN IF NOT EXISTS negocio_id INTEGER REFERENCES negocios(id) ON DELETE RESTRICT`);
   await query(`ALTER TABLE clientes     ADD COLUMN IF NOT EXISTS negocio_id INTEGER REFERENCES negocios(id) ON DELETE RESTRICT`);
@@ -197,20 +206,11 @@ async function prepararMultiTenant() {
   await query(`ALTER TABLE cuentas      ADD COLUMN IF NOT EXISTS negocio_id INTEGER REFERENCES negocios(id) ON DELETE RESTRICT`);
   await query(`ALTER TABLE caja_turnos  ADD COLUMN IF NOT EXISTS negocio_id INTEGER REFERENCES negocios(id) ON DELETE RESTRICT`);
 
-  await query(`
-    DO $$
-    DECLARE
-        v_negocio_id INTEGER;
-    BEGIN
-        SELECT id INTO v_negocio_id FROM negocios WHERE slug = 'lamella';
-
-        UPDATE usuarios    SET negocio_id = v_negocio_id WHERE negocio_id IS NULL;
-        UPDATE clientes    SET negocio_id = v_negocio_id WHERE negocio_id IS NULL;
-        UPDATE productos   SET negocio_id = v_negocio_id WHERE negocio_id IS NULL;
-        UPDATE cuentas     SET negocio_id = v_negocio_id WHERE negocio_id IS NULL;
-        UPDATE caja_turnos SET negocio_id = v_negocio_id WHERE negocio_id IS NULL;
-    END $$
-  `);
+  const { rows: semilla } = await query('SELECT id FROM negocios WHERE slug = $1', [SLUG_SEMILLA]);
+  const semillaId = semilla[0].id;
+  for (const tabla of ['usuarios', 'clientes', 'productos', 'cuentas', 'caja_turnos']) {
+    await query(`UPDATE ${tabla} SET negocio_id = $1 WHERE negocio_id IS NULL`, [semillaId]);
+  }
 
   await query(`ALTER TABLE usuarios    ALTER COLUMN negocio_id SET NOT NULL`);
   await query(`ALTER TABLE clientes    ALTER COLUMN negocio_id SET NOT NULL`);
@@ -302,11 +302,13 @@ async function prepararBaseDeDatos() {
     const password = process.env.INITIAL_ADMIN_PASSWORD || 'admin123';
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // El admin inicial debe quedar asociado al negocio semilla ('lamella'),
+    // El admin inicial debe quedar asociado al negocio semilla,
     // que ya existe gracias a prepararMultiTenant(). negocio_id es NOT NULL,
     // así que este INSERT fallaría sin resolverlo primero.
+    const { SLUG_SEMILLA: SLUG_ADMIN } = require('./utils/negocioSemilla');
     const { rows: negocioRows } = await query(
-      `SELECT id FROM negocios WHERE slug = 'lamella'`
+      `SELECT id FROM negocios WHERE slug = $1`,
+      [SLUG_ADMIN]
     );
     const negocioId = negocioRows[0].id;
 

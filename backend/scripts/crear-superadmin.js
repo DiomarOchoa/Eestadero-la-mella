@@ -2,11 +2,12 @@
  * Crea o promueve un SUPERADMIN del SaaS.
  * Uso:
  *   node scripts/crear-superadmin.js <username> <password> [nombreCompleto]
- * El usuario queda en el negocio 'lamella' con rol SUPERADMIN.
+ * El usuario queda en el negocio semilla con rol SUPERADMIN.
  */
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../src/config/db');
+const { SLUG_SEMILLA } = require('../src/utils/negocioSemilla');
 
 async function run() {
   const username = String(process.argv[2] || '').trim().toLowerCase();
@@ -16,9 +17,9 @@ async function run() {
     console.error('Uso: node scripts/crear-superadmin.js <username> <password(8+)> [nombreCompleto]');
     process.exit(1);
   }
-  const { rows: neg } = await pool.query(`SELECT id FROM negocios WHERE slug = 'lamella' LIMIT 1`);
+  const { rows: neg } = await pool.query('SELECT id, slug FROM negocios WHERE slug = $1 LIMIT 1', [SLUG_SEMILLA]);
   if (!neg[0]) {
-    console.error("No existe el negocio 'lamella'. Levanta el servidor una vez para crearlo.");
+    console.error(`No existe el negocio semilla ('${SLUG_SEMILLA}'). Levanta el servidor una vez para crearlo.`);
     process.exit(1);
   }
   const hash = await bcrypt.hash(password, 10);
