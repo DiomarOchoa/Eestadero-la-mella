@@ -38,6 +38,12 @@ const crear = asyncHandler(async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  // Username único global (igual que en el registro de negocios).
+  const { rows: repetido } = await query(
+    'SELECT 1 FROM usuarios WHERE LOWER(username) = $1 LIMIT 1',
+    [username.toLowerCase()]
+  );
+  if (repetido[0]) throw new ApiError(409, 'Ese nombre de usuario ya está en uso. Elige otro.');
   try {
     // El username ahora es único POR NEGOCIO (ver migración 005), así que
     // "admin" puede existir en cada negocio sin chocar entre ellos.

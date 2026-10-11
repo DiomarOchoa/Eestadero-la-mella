@@ -73,6 +73,14 @@ const crear = asyncHandler(async (req, res) => {
 
     const slug = await resolverSlugDisponible(client, nombreNegocio, slugPropuesto);
 
+    // El username es único en TODO el sistema (no solo dentro del negocio):
+    // así el login sin negocio nunca es ambiguo y nadie suplanta a otro.
+    const { rows: repetido } = await client.query(
+      'SELECT 1 FROM usuarios WHERE LOWER(username) = $1 LIMIT 1',
+      [username.toLowerCase()]
+    );
+    if (repetido[0]) throw new ApiError(409, 'Ese nombre de usuario ya está en uso. Elige otro.');
+
     // Prueba gratis: todo negocio nuevo entra en PRO por TRIAL_DIAS días.
     // Al vencer, las escrituras se bloquean (402) hasta pagar o bajar a GRATIS.
     const trialDias = Number(process.env.TRIAL_DIAS) || 14;
