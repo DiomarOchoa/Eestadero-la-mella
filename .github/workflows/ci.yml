@@ -9,6 +9,20 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: estadero_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +36,24 @@ jobs:
         working-directory: backend
       - run: npm test
         working-directory: backend
+      - name: Migrar DB de prueba y correr tests de aislamiento
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: estadero_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: ci_secreto_de_prueba_largo
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/estadero_test
+        run: |
+          node src/server.js & echo $! > server.pid
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/api/health && break
+            sleep 2
+          done
+          npm test
+          kill $(cat server.pid)
 
   frontend:
     runs-on: ubuntu-latest
