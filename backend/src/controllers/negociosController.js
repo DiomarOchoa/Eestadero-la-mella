@@ -12,16 +12,7 @@ const jwt = require('jsonwebtoken');
 const { getClient } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
-
-/** "Bar El Rincón" -> "bar-el-rincon" */
-function generarSlugBase(texto) {
-  return String(texto || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
-}
+const { generarSlugBase } = require('../utils/slug');
 
 /** Encuentra un slug libre partiendo de una base (agrega -2, -3, ... si choca). */
 async function resolverSlugDisponible(client, nombreNegocio, slugSugerido) {
