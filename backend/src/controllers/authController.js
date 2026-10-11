@@ -55,6 +55,8 @@ async function resolverNegocio(req) {
 /**
  * POST /api/auth/login
  * Body: { username, password, negocio? }
+ * El campo negocio es OPCIONAL: solo se pide cuando el mismo username
+ * existe en varios negocios. Si existe en uno solo, se resuelve solo.
  */
 const login = asyncHandler(async (req, res) => {
   const username = String(req.body.username || '').trim().toLowerCase();
@@ -64,7 +66,38 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Usuario y contraseña son obligatorios.');
   }
 
-  const negocio = await resolverNegocio(req);
+  const slugPista =
+    slugDesdeHost(req.headers.host) ||
+    String(req.headers['x-negocio-slug'] || '').trim().toLowerCase() ||
+    String(req.body.negocio || '').trim().toLowerCase();
+
+  let negocio = null;
+
+  if (slugPista) {
+    const { rows } = await query(
+      'SELECT id, nombre, slug, activo FROM negocios WHERE slug = $1',
+      [slugPista]
+    );
+    if (!rows[0]) throw new ApiError(404, 'Ese negocio no existe.');
+    negocio = rows[0];
+  } else {
+    // Sin slug: ¿en cuántos negocios existe este username activo?
+    const { rows } = await query(
+      `SELECT n.id, n.nombre, n.slug, n.activo
+       FROM usuarios u
+       JOIN negocios n ON n.id = u.negocio_id
+       WHERE LOWER(u.username) = $1 AND u.activo = TRUE AND n.activo = TRUE`,
+      [username]
+    );
+    if (rows.length === 0) {
+      // Respuesta genérica: no revelamos si el usuario existe.
+      throw new ApiError(401, 'Usuario o contraseña incorrectos.');
+    }
+    if (rows.length > 1) {
+      throw new ApiError(400, 'Tu usuario existe en varios negocios. Escribe el negocio para entrar.');
+    }
+    negocio = rows[0];
+  }
   if (!negocio.activo) {
     throw new ApiError(403, 'Este negocio está suspendido. Contacta al administrador del servicio.');
   }

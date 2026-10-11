@@ -64,7 +64,7 @@ export default function Login() {
 
         <form onSubmit={onSubmit}>
           <div className="field">
-            <label htmlFor="negocio">Negocio (slug)</label>
+            <label htmlFor="negocio">Negocio <span style={{ fontWeight: 400 }}>(solo si te lo pide)</span></label>
             <input
               id="negocio"
               className="input"
@@ -78,7 +78,6 @@ export default function Login() {
                   localStorage.setItem('lamella_negocio_slug', e.target.value.trim().toLowerCase());
                 } catch {}
               }}
-              required
             />
           </div>
           <div className="field">
