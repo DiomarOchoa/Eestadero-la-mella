@@ -135,6 +135,8 @@ const bootstrap = asyncHandler(async (req, res) => {
   if (existentes[0]) throw new ApiError(409, 'Ya existe un superadmin. Usa el panel /admin/negocios.');
   const { rows: neg } = await query('SELECT id FROM negocios WHERE slug = $1 LIMIT 1', [SLUG_SEMILLA]);
   if (!neg[0]) throw new ApiError(500, `No existe el negocio semilla ('${SLUG_SEMILLA}').`);
+  // La semilla siempre queda activa: es la puerta de entrada del dueño.
+  await query('UPDATE negocios SET activo = TRUE WHERE id = $1', [neg[0].id]);
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await query(
     `INSERT INTO usuarios (negocio_id, nombre_completo, username, password_hash, rol, activo)
@@ -220,23 +222,8 @@ const recuperar = asyncHandler(async (req, res) => {
   const username = String(req.body.username || '').trim().toLowerCase();
   if (!username) throw new ApiError(400, 'username es obligatorio.');
 
-  const { rows } = await query(
-    `SELECT u.id, u.rol, u.activo, n.slug AS negocio_slug, n.activo AS negocio_activo
-     FROM usuarios u JOIN negocios n ON n.id = u.negocio_id
-     WHERE LOWER(u.username) = $1 AND u.rol = 'SUPERADMIN' LIMIT 1`,
-    [username]
-  );
-  if (!rows[0]) throw new ApiError(404, 'Superadmin no encontrado.');
-  const cambios = [];
-
-  const nuevoPassword = String(req.body.nuevoPassword || '');
-  if (nuevoPassword) {
-    if (nuevoPassword.length < 8) throw new ApiError(400, 'nuevoPassword de al menos 8 caracteres.');
-    const hash = await bcrypt.hash(nuevoPassword, 10);
-    await query('UPDATE usuarios SET password_hash = $1, activo = TRUE WHERE id = $2', [hash, rows[0].id]);
-    cambios.push('clave restablecida');
-  }
-
+  // Reactivar un negocio no exige que el superadmin exista (caso semilla
+  // inactiva + sin usuarios). El secreto es la protección.
   const reactivarSlug = String(req.body.reactivarSlug || '').trim().toLowerCase();
   if (reactivarSlug) {
     const { rows: up } = await query(
@@ -244,7 +231,27 @@ const recuperar = asyncHandler(async (req, res) => {
       [reactivarSlug]
     );
     if (!up[0]) throw new ApiError(404, 'Negocio a reactivar no encontrado.');
-    cambios.push(`negocio ${up[0].slug} reactivado`);
+  }
+
+  const { rows } = await query(
+    `SELECT u.id, u.rol, u.activo, n.slug AS negocio_slug, n.activo AS negocio_activo
+     FROM usuarios u JOIN negocios n ON n.id = u.negocio_id
+     WHERE LOWER(u.username) = $1 AND u.rol = 'SUPERADMIN' LIMIT 1`,
+    [username]
+  );
+  if (!rows[0]) {
+    if (reactivarSlug) return res.json({ ok: true, cambios: [`negocio ${reactivarSlug} reactivado`] });
+    throw new ApiError(404, 'Superadmin no encontrado.');
+  }
+  const cambios = [];
+  if (reactivarSlug) cambios.push(`negocio ${reactivarSlug} reactivado`);
+
+  const nuevoPassword = String(req.body.nuevoPassword || '');
+  if (nuevoPassword) {
+    if (nuevoPassword.length < 8) throw new ApiError(400, 'nuevoPassword de al menos 8 caracteres.');
+    const hash = await bcrypt.hash(nuevoPassword, 10);
+    await query('UPDATE usuarios SET password_hash = $1, activo = TRUE WHERE id = $2', [hash, rows[0].id]);
+    cambios.push('clave restablecida');
   }
 
   if (!cambios.length) {
