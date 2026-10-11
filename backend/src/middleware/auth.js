@@ -85,6 +85,8 @@ async function autenticar(req, res, next) {
 function autorizar(...rolesPermitidos) {
   return (req, res, next) => {
     if (!req.usuario) return next(new ApiError(401, 'No autenticado.'));
+    // SUPERADMIN (dueño del SaaS) puede todo dentro de cualquier negocio.
+    if (req.usuario.rol === 'SUPERADMIN') return next();
     if (!rolesPermitidos.includes(req.usuario.rol)) {
       return next(new ApiError(403, 'No tienes permisos para realizar esta acción.'));
     }

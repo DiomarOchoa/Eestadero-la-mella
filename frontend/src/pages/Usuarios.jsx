@@ -8,7 +8,7 @@ import { useConfirm } from '../context/ConfirmContext';
 const VACIO = { nombreCompleto: '', username: '', password: '', rol: 'EMPLEADO' };
 
 export default function Usuarios() {
-  const { usuario: usuarioActual } = useAuth();
+  const { usuario: usuarioActual, esSuperAdmin } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
   const [usuarios, setUsuarios] = useState([]);
@@ -162,6 +162,7 @@ export default function Usuarios() {
                 onChange={(e) => setForm({ ...form, rol: e.target.value })}>
                 <option value="EMPLEADO">Empleado</option>
                 <option value="ADMIN">Administrador</option>
+                {esSuperAdmin && <option value="SUPERADMIN">Superadmin</option>}
               </select>
             </div>
             <button className="btn btn-primary btn-block" type="submit" disabled={guardando}>

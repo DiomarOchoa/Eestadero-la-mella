@@ -29,7 +29,10 @@ const crear = asyncHandler(async (req, res) => {
   if (!nombreCompleto || !username || !password) throw new ApiError(400, 'Nombre completo, usuario y contraseña son obligatorios.');
   if (username.length < 3 || username.length > 50) throw new ApiError(400, 'El usuario debe tener entre 3 y 50 caracteres.');
   if (password.length < 6) throw new ApiError(400, 'La contraseña debe tener al menos 6 caracteres.');
-  if (!['ADMIN', 'EMPLEADO'].includes(rol)) throw new ApiError(400, 'El rol debe ser ADMIN o EMPLEADO.');
+  if (!['ADMIN', 'EMPLEADO', 'SUPERADMIN'].includes(rol)) throw new ApiError(400, 'El rol debe ser ADMIN, EMPLEADO o SUPERADMIN.');
+  if (rol === 'SUPERADMIN' && req.usuario.rol !== 'SUPERADMIN') {
+    throw new ApiError(403, 'Solo un superadmin puede crear otro superadmin.');
+  }
 
   const passwordHash = await bcrypt.hash(password, 10);
   try {
@@ -61,7 +64,10 @@ const actualizar = asyncHandler(async (req, res) => {
   if (!existente) throw new ApiError(404, 'Usuario no encontrado.');
 
   const rolLimpio = rol === undefined ? null : String(rol).toUpperCase();
-  if (rolLimpio !== null && !['ADMIN', 'EMPLEADO'].includes(rolLimpio)) throw new ApiError(400, 'El rol debe ser ADMIN o EMPLEADO.');
+  if (rolLimpio !== null && !['ADMIN', 'EMPLEADO', 'SUPERADMIN'].includes(rolLimpio)) throw new ApiError(400, 'El rol debe ser ADMIN, EMPLEADO o SUPERADMIN.');
+  if (rolLimpio === 'SUPERADMIN' && req.usuario.rol !== 'SUPERADMIN') {
+    throw new ApiError(403, 'Solo un superadmin puede asignar el rol superadmin.');
+  }
   if (activo !== undefined && typeof activo !== 'boolean') throw new ApiError(400, 'El estado activo debe ser verdadero o falso.');
   if (password !== undefined && String(password).length > 0 && String(password).length < 6) throw new ApiError(400, 'La contraseña debe tener al menos 6 caracteres.');
 
@@ -71,7 +77,7 @@ const actualizar = asyncHandler(async (req, res) => {
   // "Último admin" ahora se cuenta DENTRO del negocio, no en todo el sistema.
   if (existente.rol === 'ADMIN' && existente.activo && (activo === false || rolLimpio === 'EMPLEADO')) {
     const { rows: admins } = await query(
-      `SELECT COUNT(*)::int AS total FROM usuarios WHERE negocio_id = $1 AND rol = 'ADMIN' AND activo = TRUE AND id <> $2`,
+      `SELECT COUNT(*)::int AS total FROM usuarios WHERE negocio_id = $1 AND rol IN ('ADMIN', 'SUPERADMIN') AND activo = TRUE AND id <> $2`,
       [req.negocioId, idNum]
     );
     if (admins[0].total === 0) throw new ApiError(400, 'No puedes dejar este negocio sin un administrador activo.');
@@ -107,7 +113,7 @@ const eliminar = asyncHandler(async (req, res) => {
 
   if (existentes[0].rol === 'ADMIN') {
     const { rows: admins } = await query(
-      `SELECT COUNT(*)::int AS total FROM usuarios WHERE negocio_id = $1 AND rol = 'ADMIN' AND activo = TRUE AND id <> $2`,
+      `SELECT COUNT(*)::int AS total FROM usuarios WHERE negocio_id = $1 AND rol IN ('ADMIN', 'SUPERADMIN') AND activo = TRUE AND id <> $2`,
       [req.negocioId, idNum]
     );
     if (admins[0].total === 0) throw new ApiError(400, 'No puedes eliminar el único administrador activo de este negocio.');
