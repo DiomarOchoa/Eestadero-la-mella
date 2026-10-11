@@ -11,6 +11,8 @@ const productosRoutes = require('./routes/productosRoutes');
 const clientesRoutes = require('./routes/clientesRoutes');
 const cuentasRoutes = require('./routes/cuentasRoutes');
 const reportesRoutes = require('./routes/reportesRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const billingRoutes = require('./routes/billingRoutes');
 
 const app = express();
 
@@ -57,6 +59,8 @@ app.use('/api/clientes', limiteGeneral, clientesRoutes);
 app.use('/api/cuentas', limiteGeneral, cuentasRoutes);
 app.use('/api/reportes', limiteGeneral, reportesRoutes);
 app.use('/api/caja', limiteGeneral, cajaRoutes);
+app.use('/api/admin', limiteGeneral, adminRoutes);
+app.use('/api/billing', billingRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, mensaje: 'Ruta no encontrada.' });

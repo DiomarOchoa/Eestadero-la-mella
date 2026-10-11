@@ -14,7 +14,7 @@ const LINKS = [
 ];
 
 export default function Navbar() {
-  const { usuario, negocio, logout, esAdmin } = useAuth();
+  const { usuario, negocio, logout, esAdmin, esSuperAdmin } = useAuth();
   const { tema, alternarTema } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,9 +25,11 @@ export default function Navbar() {
     navigate('/login');
   };
 
-  const links = esAdmin
-    ? [...LINKS, { to: '/caja', label: 'Caja', icon: Wallet }, { to: '/usuarios', label: 'Usuarios', icon: Users }]
-    : LINKS;
+  const links = [
+    ...LINKS,
+    ...(esAdmin ? [{ to: '/caja', label: 'Caja', icon: Wallet }, { to: '/usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(esSuperAdmin ? [{ to: '/admin/negocios', label: 'SaaS', icon: BarChart3 }] : []),
+  ];
 
   const estaActivo = (ruta) => {
     if (ruta === '/cuentas') {

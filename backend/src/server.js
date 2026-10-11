@@ -271,6 +271,12 @@ async function prepararMultiTenant() {
 async function prepararBaseDeDatos() {
   await query(esquemaBase);
   await query(`ALTER TYPE estado_cuenta ADD VALUE IF NOT EXISTS 'CANCELADA'`);
+  try {
+    await query(`ALTER TYPE rol_usuario ADD VALUE IF NOT EXISTS 'SUPERADMIN'`);
+  } catch (e) {
+    // Postgres no permite ADD VALUE dentro de transacción con uso concurrente: reintento simple
+    if (!String(e.message || '').includes('already exists')) throw e;
+  }
   console.log('✅ Esquema base verificado.');
 
   await prepararMultiTenant();

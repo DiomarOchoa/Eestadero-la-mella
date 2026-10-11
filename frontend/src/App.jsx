@@ -6,6 +6,7 @@ import MobileTabBar from './components/MobileTabBar';
 
 import Login from './pages/Login';
 import RegistroNegocio from './pages/RegistroNegocio';
+import AdminNegocios from './pages/AdminNegocios';
 import Dashboard from './pages/Dashboard';
 import CuentasAbiertas from './pages/CuentasAbiertas';
 import AbrirCuenta from './pages/AbrirCuenta';
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/caja" element={<ProtectedRoute soloAdmin><Layout><Caja /></Layout></ProtectedRoute>} />
         <Route path="/reportes" element={<ProtectedRoute><Layout><Reportes /></Layout></ProtectedRoute>} />
         <Route path="/usuarios" element={<ProtectedRoute soloAdmin><Layout><Usuarios /></Layout></ProtectedRoute>} />
+        <Route path="/admin/negocios" element={<ProtectedRoute soloSuper><Layout><AdminNegocios /></Layout></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

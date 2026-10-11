@@ -108,10 +108,11 @@ export function AuthProvider({ children }) {
     limpiarTema();
   }, []);
 
-  const esAdmin = usuario?.rol === 'ADMIN';
+  const esAdmin = usuario?.rol === 'ADMIN' || usuario?.rol === 'SUPERADMIN';
+  const esSuperAdmin = usuario?.rol === 'SUPERADMIN';
 
   return (
-    <AuthContext.Provider value={{ usuario, negocio, cargando, login, logout, esAdmin }}>
+    <AuthContext.Provider value={{ usuario, negocio, cargando, login, logout, esAdmin, esSuperAdmin }}>
       {children}
     </AuthContext.Provider>
   );
